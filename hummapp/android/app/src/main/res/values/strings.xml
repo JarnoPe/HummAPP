@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">HummAPP</string>
+    <string name="nfc_not_supported">Tämä laite ei tue NFC-toimintoa.</string>
+    <string name="nfc_disabled">NFC on pois päältä. Ota se käyttöön laitteen asetuksista.</string>
+    <string name="nfc_prompt">Vie puhelin hevosen riimussa olevaan NFC-tagiin...</string>
+    <string name="login_title">HummAPP Tallikirjautuminen</string>
+</resources>

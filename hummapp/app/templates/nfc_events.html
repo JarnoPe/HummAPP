@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+
+{% block title %}NFC-videointitapahtumat - HummAPP{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-900">NFC-videointitapahtumat ja leikkeet</h1>
+            <p class="text-sm text-slate-500">Android-puhelimella luetut NFC-tunnisteet ja leikatut 50 sekunnin videot</p>
+        </div>
+    </div>
+
+    <!-- Tapahtumataulukko -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-xs">
+                <thead>
+                    <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider font-semibold">
+                        <th class="py-3 px-4">Tapahtuma #</th>
+                        <th class="py-3 px-4">Hevonen</th>
+                        <th class="py-3 px-4">NFC UID</th>
+                        <th class="py-3 px-4">Lukuajankohta (UTC)</th>
+                        <th class="py-3 px-4">Paikka</th>
+                        <th class="py-3 px-4">Tila</th>
+                        <th class="py-3 px-4">Videoleike & Toiminnot</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for ev in events %}
+                    <tr class="hover:bg-slate-50 transition">
+                        <td class="py-3 px-4 font-mono font-semibold text-slate-700">#{{ ev.id }}</td>
+                        <td class="py-3 px-4">
+                            {% if ev.horse %}
+                                <a href="/web/horses/{{ ev.horse.id }}" class="font-bold text-emerald-800 hover:underline">
+                                    {{ ev.horse.name }}
+                                </a>
+                            {% else %}
+                                <span class="text-red-600 font-semibold italic">Tuntematon tagi</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-3 px-4 font-mono text-slate-600">{{ ev.nfc_uid }}</td>
+                        <td class="py-3 px-4 text-slate-500">{{ ev.phone_timestamp.strftime('%d.%m.%Y %H:%M:%S') }}</td>
+                        <td class="py-3 px-4 text-slate-600">{{ ev.location or 'kuvausalue-1' }}</td>
+                        <td class="py-3 px-4">
+                            {% if ev.status == 'READY' or ev.status == 'APPROVED' %}
+                                <span class="px-2 py-0.5 rounded-full font-bold bg-emerald-100 text-emerald-800">{{ ev.status }}</span>
+                            {% elif ev.status == 'PROCESSING' or ev.status == 'WAITING_FOR_RECORDING' %}
+                                <span class="px-2 py-0.5 rounded-full font-bold bg-amber-100 text-amber-800 animate-pulse">{{ ev.status }}</span>
+                            {% elif ev.status == 'REJECTED' %}
+                                <span class="px-2 py-0.5 rounded-full font-bold bg-slate-100 text-slate-600">REJECTED</span>
+                            {% else %}
+                                <span class="px-2 py-0.5 rounded-full font-bold bg-red-100 text-red-800" title="{{ ev.error_message }}">{{ ev.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-3 px-4">
+                            {% for clip in ev.video_clips %}
+                                {% if clip.status != 'DELETED' %}
+                                <div class="flex items-center space-x-1.5 flex-wrap gap-1">
+                                    <a href="/api/video-clips/{{ clip.id }}/download" target="_blank"
+                                        class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded transition">
+                                        Katso MP4
+                                    </a>
+                                    {% if clip.status != 'APPROVED' %}
+                                    <form action="/web/video-clips/{{ clip.id }}/approve?next=/web/nfc-events" method="POST" class="inline">
+                                        <button type="submit" class="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-medium transition">
+                                            Hyväksy
+                                        </button>
+                                    </form>
+                                    {% endif %}
+                                    {% if clip.status != 'REJECTED' %}
+                                    <form action="/web/video-clips/{{ clip.id }}/reject?next=/web/nfc-events" method="POST" class="inline">
+                                        <button type="submit" class="px-2 py-1 bg-slate-600 hover:bg-slate-700 text-white rounded font-medium transition">
+                                            Hylkää
+                                        </button>
+                                    </form>
+                                    {% endif %}
+                                    {% if current_user.role == 'admin' %}
+                                    <form action="/web/video-clips/{{ clip.id }}/delete?next=/web/nfc-events" method="POST" class="inline"
+                                        onsubmit="return confirm('Haluatko varmasti poistaa tämän videotiedoston levyltä?')">
+                                        <button type="submit" class="px-2 py-1 bg-red-100 hover:bg-red-200 text-red-700 rounded font-medium transition">
+                                            Poista
+                                        </button>
+                                    </form>
+                                    {% endif %}
+                                </div>
+                                {% else %}
+                                <span class="text-slate-400 italic">Poistettu</span>
+                                {% endif %}
+                            {% else %}
+                                {% if ev.error_message %}
+                                    <span class="text-red-500 text-[11px]">{{ ev.error_message }}</span>
+                                {% else %}
+                                    <span class="text-slate-400 italic">Käsitellään...</span>
+                                {% endif %}
+                            {% endfor %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="py-8 text-center text-slate-400">Ei vielä NFC-tapahtumia.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

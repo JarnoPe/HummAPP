@@ -1,0 +1,6 @@
+{
+  "name": "HummAPP - Hevosten Hyvinvointi & Talliseuranta",
+  "description": "Valmis HummAPP-pilottijärjestelmä Synology NASille ja Android-sovellukselle: FastAPI, SQLite, FFmpeg, NFC-tapahtumat, Anteron juomamittaukset ja talli-ilman seuranta.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

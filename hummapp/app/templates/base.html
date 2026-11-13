@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}HummAPP - Talliseuranta | Kaustisen seutukunta{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.11"></script>
+    <link rel="stylesheet" href="/static/css/style.css">
+    {% block head %}{% endblock %}
+</head>
+<body class="bg-slate-50 text-[#58595B] min-h-screen flex flex-col">
+    <!-- Virallinen EU-osarahoittama ja Kaustisen seutukunnan brändipalkki ylhäällä -->
+    <div class="bg-white border-b border-slate-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex items-center justify-between gap-4">
+            <a href="/" class="flex items-center shrink-0" aria-label="Euroopan unionin osarahoittama">
+                <img src="/static/img/eu_osarahoittama.jpg" alt="Euroopan unionin osarahoittama" class="h-11 sm:h-12 w-auto object-contain">
+            </a>
+            <div class="hidden md:block text-center text-xs text-[#6D6E71]">
+                Kaustisen seutukunnan hevostalouden pilottihanke &bull; HummAPP
+            </div>
+            <a href="/" class="flex items-center shrink-0" aria-label="Kaustisen seutukunta">
+                <img src="/static/img/kase_logo.png" alt="Kaustisen seutukunta" class="h-11 sm:h-12 w-auto object-contain">
+            </a>
+        </div>
+        <div class="h-1 w-full flex">
+            <div class="w-1/4 bg-[#FDBE4F]"></div>
+            <div class="w-1/4 bg-[#C60651]"></div>
+            <div class="w-1/2 bg-[#1B325E]"></div>
+        </div>
+    </div>
+
+    <!-- Yläpalkki -->
+    <header class="bg-[#1B325E] text-white shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center h-14">
+            <div class="flex items-center space-x-3">
+                <span class="text-xl font-bold tracking-tight text-white font-display">Humm<span class="text-[#FDBE4F]">APP</span></span>
+                <span class="text-xs text-[#C0E1F0] hidden sm:inline">&bull; Synology Pilotti</span>
+            </div>
+            {% if current_user %}
+            <nav class="hidden md:flex space-x-1 lg:space-x-2 text-sm font-medium">
+                <a href="/" class="px-3 py-2 rounded-md hover:bg-[#135367] transition {% if active_page == 'dashboard' %}bg-[#C60651] text-white{% else %}text-slate-100{% endif %}">Katsaus</a>
+                <a href="/web/horses" class="px-3 py-2 rounded-md hover:bg-[#135367] transition {% if active_page == 'horses' %}bg-[#C60651] text-white{% else %}text-slate-100{% endif %}">Hevoset</a>
+                <a href="/web/nfc-events" class="px-3 py-2 rounded-md hover:bg-[#135367] transition {% if active_page == 'events' %}bg-[#C60651] text-white{% else %}text-slate-100{% endif %}">NFC &amp; Videot</a>
+                <a href="/web/water" class="px-3 py-2 rounded-md hover:bg-[#135367] transition {% if active_page == 'water' %}bg-[#C60651] text-white{% else %}text-slate-100{% endif %}">Juominen (Antero)</a>
+                <a href="/web/air" class="px-3 py-2 rounded-md hover:bg-[#135367] transition {% if active_page == 'air' %}bg-[#C60651] text-white{% else %}text-slate-100{% endif %}">Talli-ilma</a>
+                <a href="/web/system" class="px-3 py-2 rounded-md hover:bg-[#135367] transition {% if active_page == 'system' %}bg-[#C60651] text-white{% else %}text-slate-100{% endif %}">Järjestelmä</a>
+            </nav>
+            <div class="flex items-center space-x-4">
+                <div class="text-right text-xs hidden sm:block">
+                    <div class="font-semibold text-white">{{ current_user.username }}</div>
+                    <div class="text-[#FFDCA3] capitalize">{{ current_user.role }}</div>
+                </div>
+                <a href="/web/logout" class="text-xs bg-[#135367] hover:bg-[#C60651] text-white px-3 py-1.5 rounded-md transition">Kirjaudu ulos</a>
+            </div>
+            {% endif %}
+        </div>
+    </header>
+
+    <!-- Pääsisältö -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Alapalkki -->
+    <footer class="bg-white border-t border-slate-200 py-4 text-xs text-[#6D6E71]">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row justify-between items-center gap-2">
+            <div>HummAPP Pilotti &bull; Kaustisen seutukunta &bull; Euroopan unionin osarahoittama</div>
+            <div class="text-[#939598]">hummapp.fi &bull; Synology NAS + Android</div>
+        </div>
+    </footer>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

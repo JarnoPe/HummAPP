@@ -1,0 +1,145 @@
+{
+  "read_only": true,
+  "generated_at": "2026-11-13T06:45:00Z",
+  "water_external_id": "WATER-METER-ANTERO-01",
+  "drinking_horse_name": "Antero",
+  "horses": [
+    {
+      "id": 1,
+      "name": "Antero",
+      "breed": "Suomenhevonen",
+      "birth_year": 2018,
+      "owner_name": "Kaustisen Ravikoulu",
+      "stall_box": "Karsina 4",
+      "description": "Pilottihankkeen juoma-automaatin seurantakohde. Rauhallinen ja tasainen juomarytmi.",
+      "active": true,
+      "created_at": "2026-11-01T08:00:00Z",
+      "nfc_tags": [{ "id": 1, "horse_id": 1, "nfc_uid": "04A31B92C56F80", "active": true }],
+      "notes": [
+        {
+          "id": 1,
+          "horse_id": 1,
+          "content": "Antero joi aamulla hyvin. Juoma-automaatin virtaus tarkastettu.",
+          "author_username": "tallityontekija",
+          "created_at": "2026-11-13T04:40:00Z"
+        }
+      ],
+      "analyses": [
+        {
+          "id": 1,
+          "horse_id": 1,
+          "analysis_method": "Visuaalinen askellusanalyysi",
+          "analysis_timestamp": "2026-11-12T06:40:00Z",
+          "summary": "Symmetrinen ja puhdas ravi molempiin suuntiin, ei ontumishavaintoja.",
+          "status": "APPROVED"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Valo",
+      "breed": "Lämminverinen ravihevonen",
+      "birth_year": 2020,
+      "owner_name": "Kaustisen Ravikoulu",
+      "stall_box": "Karsina 2",
+      "description": "Liikeanalyysin ja NFC-videokuvauksen säännöllinen seurantaryhmä.",
+      "active": true,
+      "created_at": "2026-11-01T08:00:00Z",
+      "nfc_tags": [{ "id": 2, "horse_id": 2, "nfc_uid": "04E24589F10123", "active": true }],
+      "notes": [
+        {
+          "id": 2,
+          "horse_id": 2,
+          "content": "Valo siirretty kuvausalueelle kevyen verryttelyn jälkeen.",
+          "author_username": "admin",
+          "created_at": "2026-11-13T05:40:00Z"
+        }
+      ],
+      "analyses": []
+    },
+    {
+      "id": 3,
+      "name": "Sisu",
+      "breed": "Suomenhevonen",
+      "birth_year": 2017,
+      "owner_name": "Kaustisen Seudun Tallit",
+      "stall_box": "Karsina 7",
+      "description": "Kuvausalueen testikohde ja harjoitusravaaja.",
+      "active": true,
+      "created_at": "2026-11-01T08:00:00Z",
+      "nfc_tags": [{ "id": 3, "horse_id": 3, "nfc_uid": "04F19C32A81204", "active": true }],
+      "notes": [],
+      "analyses": []
+    }
+  ],
+  "water_daily": [
+    { "date": "2026-11-06", "total_liters": 32.0, "measurement_count": 4 },
+    { "date": "2026-11-07", "total_liters": 36.5, "measurement_count": 4 },
+    { "date": "2026-11-08", "total_liters": 29.8, "measurement_count": 4 },
+    { "date": "2026-11-09", "total_liters": 38.2, "measurement_count": 4 },
+    { "date": "2026-11-10", "total_liters": 34.0, "measurement_count": 4 },
+    { "date": "2026-11-11", "total_liters": 41.5, "measurement_count": 4 },
+    { "date": "2026-11-12", "total_liters": 35.1, "measurement_count": 4 },
+    { "date": "2026-11-13", "total_liters": 34.2, "measurement_count": 5 }
+  ],
+  "water_measurements": [
+    {
+      "id": 1,
+      "horse_id": 1,
+      "horse_name": "Antero",
+      "external_measurement_id": "MOCK-WTR-SNAPSHOT-1",
+      "external_water_id": "WATER-METER-ANTERO-01",
+      "measured_at": "2026-11-13T06:10:00Z",
+      "liters": 6.8,
+      "raw_data_json": "{\"source\":\"MockWaterDispenserV1\",\"flow_rate_lpm\":8.2,\"duration_sec\":50,\"temp_celsius\":12.1}"
+    }
+  ],
+  "air_readings": [
+    {
+      "id": 1,
+      "sensor_id": "SENSOR-STABLE-MAIN",
+      "location": "Päätalli / Karsinakäytävä",
+      "measured_at": "2026-11-13T06:30:00Z",
+      "temperature": 11.4,
+      "humidity": 67.2,
+      "ammonia": 3.1,
+      "co2": 820,
+      "particulate_matter": 19.4
+    },
+    {
+      "id": 2,
+      "sensor_id": "SENSOR-STABLE-BOX-ANTERO",
+      "location": "Karsina 4 (Antero)",
+      "measured_at": "2026-11-13T06:30:00Z",
+      "temperature": 12.1,
+      "humidity": 69.5,
+      "ammonia": 3.6,
+      "co2": 880,
+      "particulate_matter": 22.1
+    }
+  ],
+  "nfc_events": [
+    {
+      "id": 1,
+      "horse_id": 1,
+      "horse_name": "Antero",
+      "nfc_uid": "04A31B92C56F80",
+      "phone_timestamp": "2026-11-13T05:10:00Z",
+      "location": "kuvausalue-1",
+      "status": "APPROVED",
+      "video_clip_id": 1,
+      "video_clip_status": "APPROVED"
+    },
+    {
+      "id": 2,
+      "horse_id": 2,
+      "horse_name": "Valo",
+      "nfc_uid": "04E24589F10123",
+      "phone_timestamp": "2026-11-13T06:10:00Z",
+      "location": "kuvausalue-1",
+      "status": "READY",
+      "video_clip_id": 2,
+      "video_clip_status": "READY"
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Calibri", "Carlito", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Franklin Gothic Demi", "Libre Franklin", "Calibri", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --color-kase-navy: #1B325E;
+  --color-kase-crimson: #C60651;
+  --color-kase-gold: #FDBE4F;
+  --color-kase-gold-light: #FFDCA3;
+  --color-kase-green: #00A34D;
+  --color-kase-petrol: #135367;
+  --color-kase-sky: #C0E1F0;
+  --color-kase-orange: #F89628;
+  --color-kase-brick: #A1342C;
+  --color-kase-gray-80: #58595B;
+  --color-kase-gray-70: #6D6E71;
+  --color-kase-gray-50: #939598;
+}
+
+@layer base {
+  body {
+    font-family: var(--font-sans);
+    color: #58595B;
+    background-color: #F8FAFC;
+  }
+
+  h1, h2, h3, h4 {
+    font-family: var(--font-display);
+    color: #1B325E;
+  }
+}

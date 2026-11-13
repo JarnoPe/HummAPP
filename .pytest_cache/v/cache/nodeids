@@ -1,0 +1,23 @@
+[
+  "hummapp/tests/test_air_quality.py::test_stable_air_measurement_storage",
+  "hummapp/tests/test_auth.py::test_login_success",
+  "hummapp/tests/test_auth.py::test_login_wrong_password",
+  "hummapp/tests/test_auth.py::test_unauthenticated_access_blocked",
+  "hummapp/tests/test_horses.py::test_assign_nfc_tag",
+  "hummapp/tests/test_horses.py::test_create_horse",
+  "hummapp/tests/test_horses.py::test_list_horses",
+  "hummapp/tests/test_nfc.py::test_known_nfc_tag_reading",
+  "hummapp/tests/test_nfc.py::test_nfc_duplicate_reading_debounced",
+  "hummapp/tests/test_nfc.py::test_unknown_nfc_tag_reading",
+  "hummapp/tests/test_notes.py::test_add_and_get_horse_notes",
+  "hummapp/tests/test_security.py::test_validate_and_resolve_video_path_traversal",
+  "hummapp/tests/test_security.py::test_validate_and_resolve_video_path_valid",
+  "hummapp/tests/test_videos.py::test_approve_video_clip",
+  "hummapp/tests/test_videos.py::test_path_traversal_prevention",
+  "hummapp/tests/test_videos.py::test_reject_video_clip",
+  "hummapp/tests/test_videos.py::test_safe_delete_video_clip",
+  "hummapp/tests/test_water_antero.py::test_antero_water_measurement_success",
+  "hummapp/tests/test_water_antero.py::test_unknown_water_id_not_attached_to_antero",
+  "hummapp/tests/test_water_antero.py::test_water_measurement_duplicate_deduplication",
+  "hummapp/tests/test_water_antero.py::test_water_measurement_when_antero_not_found"
+]

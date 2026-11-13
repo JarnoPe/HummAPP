@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+
+{% block title %}Järjestelmätila - HummAPP{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div>
+        <h1 class="text-2xl font-bold text-slate-900">Järjestelmän tila ja diagnostiikka</h1>
+        <p class="text-sm text-slate-500">Synology NAS -kontin toiminta, tietokantatila ja konfiguraatiotarkistukset</p>
+    </div>
+
+    <!-- Tilaruudukko -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <!-- Tietokanta -->
+        <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">SQLite Tietokanta</span>
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">WAL-TILA OK</span>
+            </div>
+            <div class="mt-2 text-sm font-semibold text-slate-800">Tiedosto: <code>{{ settings.DATABASE_PATH }}</code></div>
+            <div class="mt-1 text-xs text-slate-500">Lukitusodotus: 5000 ms &bull; Viiteavaimet: ON</div>
+        </div>
+
+        <!-- Antero ja juoma-automaatti -->
+        <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-semibold uppercase tracking-wider text-blue-600">Juoma-automaatti (Antero)</span>
+                {% if antero_found %}
+                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">YHDISTETTY</span>
+                {% else %}
+                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-800 animate-pulse">EI LÖYDY!</span>
+                {% endif %}
+            </div>
+            <div class="mt-2 text-sm font-semibold text-slate-800">Kohde: {{ settings.DRINKING_HORSE_NAME }}</div>
+            <div class="mt-1 text-xs text-slate-500">Laitetunnus: <code class="font-mono text-slate-700">{{ settings.WATER_EXTERNAL_ID }}</code></div>
+        </div>
+
+        <!-- Kamera ja tallennuskansiot -->
+        <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Kameratallenteet</span>
+                {% if camera_dir_exists %}
+                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">HAKEMISTO OK</span>
+                {% else %}
+                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">EI LIITETTY</span>
+                {% endif %}
+            </div>
+            <div class="mt-2 text-xs text-slate-600 truncate">Lähde: <code>{{ settings.CAMERA_SOURCE_PATH }}</code></div>
+            <div class="mt-1 text-xs text-slate-600 truncate">Kohde: <code>{{ settings.VIDEO_OUTPUT_PATH }}</code></div>
+        </div>
+    </div>
+
+    <!-- Järjestelmäloki / Hälytykset -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
+            <h2 class="font-bold text-slate-800 text-sm">Järjestelmätapahtumat ja hälytykset</h2>
+            <span class="text-xs text-slate-500">{{ system_events|length }} tapahtumaa</span>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-xs">
+                <thead>
+                    <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider font-semibold">
+                        <th class="py-2.5 px-4">Taso</th>
+                        <th class="py-2.5 px-4">Tyyppi</th>
+                        <th class="py-2.5 px-4">Aika (UTC)</th>
+                        <th class="py-2.5 px-4">Viesti</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for ev in system_events %}
+                    <tr class="hover:bg-slate-50 transition">
+                        <td class="py-2 px-4">
+                            {% if ev.level == 'ERROR' %}
+                                <span class="px-1.5 py-0.5 rounded font-bold bg-red-100 text-red-800">ERROR</span>
+                            {% elif ev.level == 'WARNING' %}
+                                <span class="px-1.5 py-0.5 rounded font-bold bg-amber-100 text-amber-800">WARN</span>
+                            {% else %}
+                                <span class="px-1.5 py-0.5 rounded font-bold bg-slate-100 text-slate-700">INFO</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-2 px-4 font-mono font-medium text-slate-700">{{ ev.event_type }}</td>
+                        <td class="py-2 px-4 text-slate-500">{{ ev.created_at.strftime('%d.%m.%Y %H:%M:%S') }}</td>
+                        <td class="py-2 px-4 text-slate-800 font-mono text-[11px]">{{ ev.message }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="4" class="py-6 text-center text-slate-400">Ei virheitä tai hälytyksiä kirjattuna.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

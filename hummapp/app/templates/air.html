@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+
+{% block title %}Talli-ilman seuranta - HummAPP{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-900">Talli-ilman ja olosuhteiden seuranta</h1>
+            <p class="text-sm text-slate-500">Tallin lämpötila, ilmankosteus, ammoniakki, hiilidioksidi ja pienhiukkaset</p>
+        </div>
+        <form action="/web/air/sync" method="POST">
+            <button type="submit"
+                class="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold rounded-lg shadow-sm transition">
+                Päivitä anturilukemat nyt
+            </button>
+        </form>
+    </div>
+
+    <!-- Pääindikaattorikortit -->
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <!-- Lämpötila -->
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Lämpötila</div>
+            <div class="mt-2 text-2xl font-black text-slate-900">
+                {% if latest %}{{ latest.temperature }} <span class="text-sm font-normal text-slate-500">°C</span>{% else %}--{% endif %}
+            </div>
+            <div class="mt-1 text-[10px] text-slate-400">Optimi: 8 - 14 °C</div>
+        </div>
+
+        <!-- Kosteus -->
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Ilmankosteus</div>
+            <div class="mt-2 text-2xl font-black text-slate-900">
+                {% if latest %}{{ latest.humidity }} <span class="text-sm font-normal text-slate-500">%</span>{% else %}--{% endif %}
+            </div>
+            <div class="mt-1 text-[10px] text-slate-400">Optimi: 60 - 80 %</div>
+        </div>
+
+        <!-- Ammoniakki -->
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <div class="text-[11px] font-semibold uppercase tracking-wider text-amber-600">Ammoniakki (NH3)</div>
+            <div class="mt-2 text-2xl font-black text-amber-900">
+                {% if latest %}{{ latest.ammonia }} <span class="text-sm font-normal text-slate-500">ppm</span>{% else %}--{% endif %}
+            </div>
+            <div class="mt-1 text-[10px] text-slate-400">Suositus: alle 10 ppm</div>
+        </div>
+
+        <!-- CO2 -->
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Hiilidioksidi (CO2)</div>
+            <div class="mt-2 text-2xl font-black text-slate-900">
+                {% if latest %}{{ latest.co2 }} <span class="text-sm font-normal text-slate-500">ppm</span>{% else %}--{% endif %}
+            </div>
+            <div class="mt-1 text-[10px] text-slate-400">Suositus: alle 1500 ppm</div>
+        </div>
+
+        <!-- Pienhiukkaset -->
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Pienhiukkaset (PM)</div>
+            <div class="mt-2 text-2xl font-black text-slate-900">
+                {% if latest %}{{ latest.particulate_matter }} <span class="text-sm font-normal text-slate-500">µg/m³</span>{% else %}--{% endif %}
+            </div>
+            <div class="mt-1 text-[10px] text-slate-400">Pöly- ja kuivikekuorma</div>
+        </div>
+    </div>
+
+    <!-- Kuvaajat -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Lämpötila & Kosteus -->
+        <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+            <h2 class="text-base font-bold text-slate-900 mb-1">Lämpötila ja ilmankosteus</h2>
+            <p class="text-xs text-slate-500 mb-4">Olosuhdekehitys viimeisiltä mittauskerroilta</p>
+            <div class="h-64">
+                <canvas id="tempHumidityChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Ammoniakki & CO2 -->
+        <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+            <h2 class="text-base font-bold text-slate-900 mb-1">Ammoniakki (NH3) ja CO2</h2>
+            <p class="text-xs text-slate-500 mb-4">Ilmanlaatu ja ilmanvaihdon riittävyys tallissa</p>
+            <div class="h-64">
+                <canvas id="gasChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mittaushistoriataulukko -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
+            <h2 class="font-bold text-slate-800 text-sm">Viimeisimmät anturilukemat</h2>
+            <span class="text-xs text-slate-500">{{ readings|length }} kpl</span>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-xs">
+                <thead>
+                    <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider font-semibold">
+                        <th class="py-3 px-4">Aikaleima (UTC)</th>
+                        <th class="py-3 px-4">Sensori & Sijainti</th>
+                        <th class="py-3 px-4">Lämpötila</th>
+                        <th class="py-3 px-4">Kosteus</th>
+                        <th class="py-3 px-4">Ammoniakki</th>
+                        <th class="py-3 px-4">CO2</th>
+                        <th class="py-3 px-4">Hiukkaset</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for r in readings %}
+                    <tr class="hover:bg-slate-50 transition">
+                        <td class="py-2.5 px-4 text-slate-700">{{ r.measured_at.strftime('%d.%m.%Y %H:%M:%S') }}</td>
+                        <td class="py-2.5 px-4 font-medium text-slate-900">
+                            {{ r.location or r.sensor_id }}
+                            <div class="text-[10px] text-slate-400 font-mono">{{ r.sensor_id }}</div>
+                        </td>
+                        <td class="py-2.5 px-4">{{ r.temperature }} °C</td>
+                        <td class="py-2.5 px-4">{{ r.humidity }} %</td>
+                        <td class="py-2.5 px-4 font-semibold text-amber-800">{{ r.ammonia }} ppm</td>
+                        <td class="py-2.5 px-4">{{ r.co2 }} ppm</td>
+                        <td class="py-2.5 px-4">{{ r.particulate_matter }} µg/m³</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="py-8 text-center text-slate-400">Ei vielä ilmanlaatumittauksia.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    fetch('/api/stable-air?limit=25')
+        .then(res => res.json())
+        .then(data => {
+            // Järjestetään vanhimmasta uusimpaan kuvaajaa varten
+            data.reverse();
+            const labels = data.map(d => new Date(d.measured_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}));
+
+            // 1. Lämpötila & Kosteus
+            new Chart(document.getElementById('tempHumidityChart').getContext('2d'), {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Lämpötila (°C)',
+                            data: data.map(d => d.temperature),
+                            borderColor: 'rgb(234, 88, 12)',
+                            backgroundColor: 'rgba(234, 88, 12, 0.1)',
+                            yAxisID: 'y',
+                            tension: 0.3
+                        },
+                        {
+                            label: 'Kosteus (%)',
+                            data: data.map(d => d.humidity),
+                            borderColor: 'rgb(14, 165, 233)',
+                            backgroundColor: 'rgba(14, 165, 233, 0.1)',
+                            yAxisID: 'y1',
+                            tension: 0.3
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { type: 'linear', display: true, position: 'left', title: { display: true, text: '°C' } },
+                        y1: { type: 'linear', display: true, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: '%' } }
+                    }
+                }
+            });
+
+            // 2. Ammoniakki & CO2
+            new Chart(document.getElementById('gasChart').getContext('2d'), {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Ammoniakki (ppm)',
+                            data: data.map(d => d.ammonia),
+                            borderColor: 'rgb(217, 119, 6)',
+                            backgroundColor: 'rgba(217, 119, 6, 0.1)',
+                            yAxisID: 'y',
+                            tension: 0.3
+                        },
+                        {
+                            label: 'CO2 (ppm)',
+                            data: data.map(d => d.co2),
+                            borderColor: 'rgb(100, 116, 139)',
+                            backgroundColor: 'rgba(100, 116, 139, 0.1)',
+                            yAxisID: 'y1',
+                            tension: 0.3
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { type: 'linear', display: true, position: 'left', title: { display: true, text: 'NH3 ppm' } },
+                        y1: { type: 'linear', display: true, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'CO2 ppm' } }
+                    }
+                }
+            });
+        });
+});
+</script>
+{% endblock %}

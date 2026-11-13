@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+
+{% block title %}Anteron juomisseuranta - HummAPP{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+            <div class="flex items-center space-x-3">
+                <h1 class="text-2xl font-bold text-slate-900">Anteron juomisseuranta</h1>
+                <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-800">Automaattimittaus</span>
+            </div>
+            <p class="text-sm text-slate-500">Hankepilotin ainoa juoma-automaatilla varustettu hevonen: <strong>{{ drinking_horse_name }}</strong></p>
+        </div>
+        <form action="/web/water/sync" method="POST">
+            <button type="submit"
+                class="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm transition flex items-center space-x-2">
+                <span>Päivitä mittaukset nyt</span>
+            </button>
+        </form>
+    </div>
+
+    {% if not antero_found %}
+    <div class="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-sm">
+        <div class="font-bold">HUOMIO: Anteroa ei löydy tietokannasta!</div>
+        <p class="text-xs mt-1">
+            Juomamittauksia ei voida yhdistää ennen kuin luot hevosen nimellä <code>{{ drinking_horse_name }}</code>.
+            Voit luoda sen hevosvalikosta tai <a href="/web/horses" class="underline font-semibold">tästä linkistä</a>.
+        </p>
+    </div>
+    {% endif %}
+
+    <!-- Pikatilastot -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+            <div class="text-xs font-semibold uppercase tracking-wider text-slate-500">Tänään juotu yhteensä</div>
+            <div class="mt-2 text-3xl font-black text-blue-900">{{ today_liters }} <span class="text-lg font-normal text-slate-500">litraa</span></div>
+            <div class="mt-1 text-xs text-slate-400">{{ today_count }} juontikertaa tänään</div>
+        </div>
+        <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+            <div class="text-xs font-semibold uppercase tracking-wider text-slate-500">Viimeisin juomiskerta</div>
+            <div class="mt-2 text-xl font-black text-slate-900">
+                {% if latest_measurement %}
+                    {{ latest_measurement.liters }} L
+                {% else %}
+                    --
+                {% endif %}
+            </div>
+            <div class="mt-1 text-xs text-slate-400">
+                {% if latest_measurement %}
+                    {{ latest_measurement.measured_at.strftime('%d.%m.%Y klo %H:%M') }}
+                {% else %}
+                    Ei mittauksia
+                {% endif %}
+            </div>
+        </div>
+        <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+            <div class="text-xs font-semibold uppercase tracking-wider text-slate-500">Juomalaitteen tunnus</div>
+            <div class="mt-2 text-sm font-mono font-bold text-slate-800">{{ water_external_id }}</div>
+            <div class="mt-1 text-xs text-slate-400">Vain tälle laitteelle saapuva data yhdistetään</div>
+        </div>
+    </div>
+
+    <!-- Juomishistorian kuvaaja -->
+    <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+        <h2 class="text-base font-bold text-slate-900 mb-1">Päivittäinen juomamäärä (Litraa / vrk)</h2>
+        <p class="text-xs text-slate-500 mb-4">Automaattisen vesimittarin rekisteröimät vuorokausiannokset</p>
+        <div class="h-72">
+            <canvas id="waterChartFull"></canvas>
+        </div>
+    </div>
+
+    <!-- Yksittäiset juomiskerrat -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
+            <h2 class="font-bold text-slate-800 text-sm">Yksittäiset juomiskerrat (Viimeisimmät 50)</h2>
+            <span class="text-xs text-slate-500">{{ measurements|length }} kpl</span>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-xs">
+                <thead>
+                    <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider font-semibold">
+                        <th class="py-3 px-4">Mittaus-ID</th>
+                        <th class="py-3 px-4">Aika (UTC)</th>
+                        <th class="py-3 px-4">Juotu määrä</th>
+                        <th class="py-3 px-4">Laitetunnus</th>
+                        <th class="py-3 px-4">Kohdehevonen</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for m in measurements %}
+                    <tr class="hover:bg-slate-50 transition">
+                        <td class="py-2.5 px-4 font-mono text-slate-600">{{ m.external_measurement_id }}</td>
+                        <td class="py-2.5 px-4 text-slate-700">{{ m.measured_at.strftime('%d.%m.%Y %H:%M:%S') }}</td>
+                        <td class="py-2.5 px-4 font-bold text-blue-900 text-sm">{{ m.liters }} L</td>
+                        <td class="py-2.5 px-4 font-mono text-slate-500">{{ m.external_water_id }}</td>
+                        <td class="py-2.5 px-4">
+                            {% if m.horse %}
+                                <span class="px-2 py-0.5 rounded bg-blue-50 text-blue-800 font-semibold">{{ m.horse.name }}</span>
+                            {% else %}
+                                <span class="px-2 py-0.5 rounded bg-amber-50 text-amber-800 font-semibold">Tunnistamaton / Ei yhdistetty</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="py-8 text-center text-slate-400">Ei vielä juomismittauksia.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    fetch('/api/water/daily?days=21')
+        .then(res => res.json())
+        .then(data => {
+            const ctx = document.getElementById('waterChartFull').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: data.map(d => d.date),
+                    datasets: [{
+                        label: 'Juotu vesimäärä (litraa)',
+                        data: data.map(d => d.total_liters),
+                        backgroundColor: 'rgba(37, 99, 235, 0.8)',
+                        borderColor: 'rgb(29, 78, 216)',
+                        borderWidth: 1,
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: { display: true, text: 'Litraa' }
+                        }
+                    }
+                }
+            });
+        });
+});
+</script>
+{% endblock %}

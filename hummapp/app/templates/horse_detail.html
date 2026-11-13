@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+
+{% block title %}{{ horse.name }} - HummAPP{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Ylätunniste -->
+    <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+            <div class="flex items-center space-x-3">
+                <h1 class="text-3xl font-black text-slate-900">{{ horse.name }}</h1>
+                {% if horse.name == drinking_horse_name %}
+                    <span class="px-2.5 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">Juoma-automaatti (Antero)</span>
+                {% endif %}
+            </div>
+            <div class="mt-2 text-xs text-slate-500 flex flex-wrap gap-3 items-center">
+                <span>Hevos-ID: #{{ horse.id }}</span>
+                <span>&bull;</span>
+                <span>Luotu: {{ horse.created_at.strftime('%d.%m.%Y %H:%M') }}</span>
+                <span>&bull;</span>
+                <span>NFC-tagit:
+                    {% for tag in horse.nfc_tags %}
+                        <code class="bg-emerald-50 text-emerald-800 border border-emerald-200 px-1 rounded font-mono">{{ tag.nfc_uid }}</code>
+                    {% else %}
+                        <span class="text-slate-400 italic">Ei tagia</span>
+                    {% endfor %}
+                </span>
+            </div>
+        </div>
+        <div class="flex items-center space-x-2">
+            <a href="/web/horses" class="px-3 py-1.5 border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-medium rounded-lg transition">
+                &larr; Takaisin hevoslistaan
+            </a>
+            {% if horse.name == drinking_horse_name %}
+            <a href="/web/water" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-lg transition">
+                Anteron juomishistoria &rarr;
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Pääsisältö kolmessa sarakkeessa / osiossa -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- 1. Muistiinpanot (1/3) -->
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col">
+            <div class="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 rounded-t-xl">
+                <h2 class="font-bold text-slate-800 text-sm">Hevoskohtaiset muistiinpanot</h2>
+                <span class="text-xs text-slate-500">{{ horse.notes|length }} kpl</span>
+            </div>
+            <!-- Lisäyslomake -->
+            <div class="p-4 border-b border-slate-100">
+                <form action="/web/horses/{{ horse.id }}/notes" method="POST" class="space-y-2">
+                    <textarea name="content" required rows="2" placeholder="Kirjoita havainto tai hoitotoimenpide..."
+                        class="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none"></textarea>
+                    <button type="submit"
+                        class="w-full py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold rounded-lg transition">
+                        Tallenna muistiinpano
+                    </button>
+                </form>
+            </div>
+            <!-- Lista -->
+            <div class="p-4 divide-y divide-slate-100 max-h-96 overflow-y-auto space-y-3">
+                {% for note in horse.notes|sort(attribute='created_at', reverse=True) %}
+                <div class="pt-3 first:pt-0">
+                    <p class="text-xs text-slate-800 leading-relaxed">{{ note.content }}</p>
+                    <div class="mt-1 text-[10px] text-slate-400 flex justify-between">
+                        <span>{{ note.author.username if note.author else 'Ylläpito' }}</span>
+                        <span>{{ note.created_at.strftime('%d.%m.%Y %H:%M') }}</span>
+                    </div>
+                </div>
+                {% else %}
+                <div class="text-center text-xs text-slate-400 py-6">Ei vielä muistiinpanoja.</div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- 2. Videoleikkeet (1/3) -->
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col">
+            <div class="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 rounded-t-xl">
+                <h2 class="font-bold text-slate-800 text-sm">NFC-videoleikkeet (50s)</h2>
+                <span class="text-xs text-slate-500">{{ video_clips|length }} kpl</span>
+            </div>
+            <div class="p-4 divide-y divide-slate-100 max-h-96 overflow-y-auto space-y-3">
+                {% for clip in video_clips %}
+                <div class="pt-3 first:pt-0">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-semibold text-slate-800">Leike #{{ clip.id }}</span>
+                        {% if clip.status == 'APPROVED' %}
+                            <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">HYVÄKSYTTY</span>
+                        {% elif clip.status == 'REJECTED' %}
+                            <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600">HYLÄTTY</span>
+                        {% else %}
+                            <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800">{{ clip.status }}</span>
+                        {% endif %}
+                    </div>
+                    <div class="text-[10px] text-slate-400 mt-0.5">
+                        {{ clip.created_at.strftime('%d.%m.%Y %H:%M') }} &bull; Event #{{ clip.nfc_event_id }}
+                    </div>
+                    <div class="mt-2 flex items-center space-x-2">
+                        <a href="/api/video-clips/{{ clip.id }}/download" target="_blank"
+                            class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-medium rounded transition">
+                            Katso / Lataa video
+                        </a>
+                        {% if clip.status != 'APPROVED' %}
+                        <form action="/web/video-clips/{{ clip.id }}/approve?next=/web/horses/{{ horse.id }}" method="POST">
+                            <button type="submit" class="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-medium rounded transition">
+                                Hyväksy
+                            </button>
+                        </form>
+                        {% endif %}
+                        {% if clip.status != 'REJECTED' %}
+                        <form action="/web/video-clips/{{ clip.id }}/reject?next=/web/horses/{{ horse.id }}" method="POST">
+                            <button type="submit" class="px-2 py-1 bg-slate-600 hover:bg-slate-700 text-white text-[10px] font-medium rounded transition">
+                                Hylkää
+                            </button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </div>
+                {% else %}
+                <div class="text-center text-xs text-slate-400 py-6">Ei leikattuja videoita tälle hevoselle.</div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- 3. Liikeanalyysit (1/3) -->
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col">
+            <div class="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 rounded-t-xl">
+                <h2 class="font-bold text-slate-800 text-sm">Liikeanalyysit</h2>
+                <span class="text-xs text-slate-500">{{ horse.analyses|length }} kpl</span>
+            </div>
+            <!-- Analyysin lisäys -->
+            <div class="p-4 border-b border-slate-100">
+                <form action="/web/horses/{{ horse.id }}/analyses" method="POST" class="space-y-2">
+                    <input type="text" name="analysis_method" required placeholder="Menetelmä (esim. Visuaalinen askellusanalyysi)"
+                        class="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    <textarea name="summary" required rows="2" placeholder="Yhteenveto tuloksista ja huomioista..."
+                        class="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none"></textarea>
+                    <button type="submit"
+                        class="w-full py-1.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold rounded-lg transition">
+                        Tallenna analyysi
+                    </button>
+                </form>
+            </div>
+            <!-- Lista -->
+            <div class="p-4 divide-y divide-slate-100 max-h-96 overflow-y-auto space-y-3">
+                {% for a in horse.analyses|sort(attribute='analysis_timestamp', reverse=True) %}
+                <div class="pt-3 first:pt-0">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-slate-800">{{ a.analysis_method }}</span>
+                        <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">{{ a.status }}</span>
+                    </div>
+                    <p class="text-xs text-slate-600 mt-1 leading-relaxed">{{ a.summary }}</p>
+                    <div class="mt-1 text-[10px] text-slate-400">
+                        {{ a.analysis_timestamp.strftime('%d.%m.%Y %H:%M') }} &bull; Kirjasi: {{ a.author.username if a.author else 'Ylläpito' }}
+                    </div>
+                </div>
+                {% else %}
+                <div class="text-center text-xs text-slate-400 py-6">Ei vielä tallennettuja liikeanalyysejä.</div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

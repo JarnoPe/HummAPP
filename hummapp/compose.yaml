@@ -1,0 +1,44 @@
+# ==============================================================================
+# HummAPP Synology NAS Docker Compose -määritys
+# Käynnistys Synology Container Managerissa tai SSH:lla:
+# docker compose build
+# docker compose up -d
+# ==============================================================================
+
+services:
+  hummapp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: hummapp:latest
+    container_name: hummapp
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      # Porttiohjaus NASin sisäiseen porttiin (reverse proxy ohjaa tähän)
+      - "${APP_PORT:-8000}:8000"
+    volumes:
+      # SQLite-tietokanta ja sen WAL-lokitiedostot
+      - ./data:/data
+      # Leikatut MP4-videoleikkeet hevosittain
+      - ./videos:/videos
+      # Kameratallenteiden lähdekansio (LUE VAIN -tila suojaa kameran alkuperäistallenteet)
+      - ./camera:/camera:ro
+      # Sovelluksen lokitiedostot
+      - ./logs:/logs
+      # Varmuuskopiot
+      - ./backups:/backups
+    environment:
+      - TZ=Europe/Helsinki
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s

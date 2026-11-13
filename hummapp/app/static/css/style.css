@@ -1,0 +1,29 @@
+/* HummAPP - Kaustisen seutukunta graafinen ohjeisto */
+@import url('https://fonts.googleapis.com/css2?family=Carlito:wght@400;700&family=Libre+Franklin:wght@600;700;800&display=swap');
+
+:root {
+    --kase-navy: #1B325E;
+    --kase-crimson: #C60651;
+    --kase-gold: #FDBE4F;
+    --kase-gold-light: #FFDCA3;
+    --kase-green: #00A34D;
+    --kase-petrol: #135367;
+    --kase-sky: #C0E1F0;
+    --kase-gray-80: #58595B;
+    --kase-gray-70: #6D6E71;
+    --kase-gray-50: #939598;
+}
+
+body {
+    font-family: 'Calibri', 'Carlito', sans-serif;
+    color: var(--kase-gray-80);
+    -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4, .font-display {
+    font-family: 'Franklin Gothic Demi', 'Libre Franklin', sans-serif;
+}
+
+code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
