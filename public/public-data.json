@@ -146,6 +146,6 @@
     }
   ],
   "clip_seconds_before": 5,
-  "clip_seconds_after": 5,
+  "clip_seconds_after": 13,
   "public_video_enabled": false
 }

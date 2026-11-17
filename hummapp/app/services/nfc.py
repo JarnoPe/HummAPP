@@ -31,7 +31,7 @@ class NfcService:
         2. Saman tagin kaksoisluku 10 sekunnin ikkunassa ohitetaan (debounce).
         3. Tuntematon tagi: hevosta ei luoda, tapahtuma kirjataan FAILED-tilaan -> UNKNOWN_TAG.
         4. Tunnettu tagi: tapahtuma liitetään hevoseen ja on valmis videoleikkaukselle.
-        Puhelimen ja palvelimen kelloero tallennetaan, koska 10 s leike edellyttää tarkkaa aikaa.
+        Puhelimen ja palvelimen kelloero tallennetaan, koska lyhyt leike edellyttää tarkkaa aikaa.
         """
         uid = event_in.nfc_uid
         phone_time = to_naive_utc(event_in.phone_timestamp)

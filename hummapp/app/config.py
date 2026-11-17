@@ -40,10 +40,10 @@ class Settings(BaseSettings):
     VIDEO_OUTPUT_PATH: str = "/videos"
     CAMERA_SOURCE_PATH: str = "/camera"
     CAMERA_TIMEZONE: str = "Europe/Helsinki"
-    # Talutuksessa hevonen on kameran edessä enintään ~10 s, jonka jälkeen tulee jo
-    # seuraava eläin -> leike 5 s ennen ja 5 s jälkeen NFC-leimauksen.
+    # Leike 5 s ennen ja 13 s jälkeen NFC-leimauksen (yhteensä 18 s). Rajaus on lyhyt,
+    # koska talutuksessa kameran eteen tulee pian jo seuraava eläin.
     VIDEO_SECONDS_BEFORE: int = Field(5, ge=0, le=60)
-    VIDEO_SECONDS_AFTER: int = Field(5, ge=1, le=60)
+    VIDEO_SECONDS_AFTER: int = Field(13, ge=1, le=60)
     # Kameran yksittäisen tallennetiedoston maksimipituus (sekuntia)
     CAMERA_FILE_MAX_DURATION_SECONDS: int = 3600
     VIDEO_RETRY_INTERVAL_SECONDS: int = 5

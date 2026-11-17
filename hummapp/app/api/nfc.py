@@ -48,7 +48,7 @@ def register_nfc_event(
     """
     Vastaanottaa Android-sovelluksen NFC-lukutapahtuman.
     Tuntematon tagi -> HTTP 404 UNKNOWN_TAG. Kaksoisluku -> palautetaan aiempi tapahtuma.
-    Tunnettu tagi -> videoleikkaus (5 s ennen + 5 s jälkeen) käynnistyy taustalla.
+    Tunnettu tagi -> videoleikkaus (5 s ennen + 13 s jälkeen) käynnistyy taustalla.
     """
     registration = nfc_service.register_nfc_event(event_in=event_in, current_user=current_user, db=db)
 

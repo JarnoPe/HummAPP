@@ -8,7 +8,7 @@ ydinlogiikasta. Oletustoteutus tukee aikaleimallisia tiedostonimiä, kuten
 - Synology Surveillance Station: `<kamera>/<YYYYMMDD>AM/<kamera>-YYYYMMDD-HHMMSS-<unix>.mp4`
 - `YYYY-MM-DD/HH-MM-SS.mp4` -tyyliset rakenteet, joissa aikaleima on nimessä
 
-TÄRKEÄÄ LEIKKEEN OSUMATARKKUUDELLE (leike on vain 5 s + 5 s):
+TÄRKEÄÄ LEIKKEEN OSUMATARKKUUDELLE (leike on vain 5 s + 13 s):
 1. Tiedostonimen aikaleima tulkitaan CAMERA_TIMEZONE-aikavyöhykkeessä
    (Synology tallentaa yleensä paikallisaikaan, Europe/Helsinki).
 2. Kameran ja puhelimen kellot pitää synkronoida NTP:llä.

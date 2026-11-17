@@ -2,11 +2,11 @@
 
 Haara: `korjaukset-koodiarvio` · Pohja: `4ec6f94` · Päivämäärä: 17.11.2026
 
-## Tärkein toiminnallinen muutos: videoleike 10 s (5 s + 5 s)
+## Tärkein toiminnallinen muutos: videoleike 18 s (5 s + 13 s)
 
-Talutuksessa hevonen on kameran edessä enintään noin 10 sekuntia, jonka jälkeen kuvaan tulee jo seuraava eläin. Leike on nyt **5 s ennen ja 5 s jälkeen NFC-leimauksen** (aiemmin 10 s + 40 s = 50 s, jolloin samaan leikkeeseen osui useampi hevonen).
+Talutuksessa kameran eteen tulee pian jo seuraava eläin. Leike on nyt **5 s ennen ja 13 s jälkeen NFC-leimauksen**, yhteensä 18 s (aiemmin 10 s + 40 s = 50 s, jolloin samaan leikkeeseen osui useampi hevonen).
 
-- Muutos koskee FastAPI-oletuksia (`VIDEO_SECONDS_BEFORE=5`, `VIDEO_SECONDS_AFTER=5`), `.env.example`-tiedostoa, Node-demoa (`server.ts`), testivideoita, web-UI:n tekstejä, julkista sivua ja Android-sovellusta.
+- Muutos koskee FastAPI-oletuksia (`VIDEO_SECONDS_BEFORE=5`, `VIDEO_SECONDS_AFTER=13`), `.env.example`-tiedostoa, Node-demoa (`server.ts`), testivideoita, web-UI:n tekstejä, julkista sivua ja Android-sovellusta.
 - Lyhyt leike vaatii sekunnin tarkat ajat, joten samalla korjattiin ajoitukseen liittyvät virheet:
   - Kameratiedostojen nimissä olevat ajat tulkitaan kameran aikavyöhykkeessä (`CAMERA_TIMEZONE`). Aiemmin ne tulkittiin UTC:ksi, mikä aiheutti 2–3 tunnin virheen.
   - Android lähettää tagin **lukuhetken** millisekunnin tarkkuudella. Aiemmin aikaleimana oli lähetyshetki, josta sekunnin osat katkaistiin.
@@ -75,10 +75,10 @@ Poistettu `UserCreate`, käyttämättömät importit (ruff: 0 virhettä), `passl
 
 ## Tarkistukset
 
-- **Python:** 56 testiä läpi (aiemmin 21). Uusina mukana resolverin aikavyöhyke- ja reunatapaukset, vuorokausiraja ja kesäaika, julkisen datan rajaus, admin-oikeudet, latauslinkin rajaus, avoin uudelleenohjaus, web-sivujen renderöinti sekä päästä päähän -testi, jossa oikea FFmpeg leikkaa 10,0 s leikkeen ja event loop pysyy vapaana.
+- **Python:** 56 testiä läpi (aiemmin 21). Uusina mukana resolverin aikavyöhyke- ja reunatapaukset, vuorokausiraja ja kesäaika, julkisen datan rajaus, admin-oikeudet, latauslinkin rajaus, avoin uudelleenohjaus, web-sivujen renderöinti sekä päästä päähän -testi, jossa oikea FFmpeg leikkaa 18,0 s leikkeen ja event loop pysyy vapaana.
 - **Ajossa:** FastAPI käynnistetty uvicornilla (kirjautuminen, web-UI, NFC → leike, evästelataus). Migraatio testattu alkuperäisen version luomalla tietokannalla.
-- **Node-demo:** `tsc --noEmit` puhdas, `vite build` onnistuu, ja `server.ts` ajettu ja testattu curlilla (vanhat salasanat hylätään, `?token=` hylätään, virheellinen Range → 416, julkinen data ei vuoda, leike 10,0 s).
-- **Android:** Kotlin-tiedostot jäsentyvät virheettä (ktlint), mutta **Gradle-käännöstä ei voitu ajaa** (ei Android SDK:ta tässä ympäristössä). Käännä ja testaa Android Studiossa ennen asennusta.
+- **Node-demo:** `tsc --noEmit` puhdas, `vite build` onnistuu, ja `server.ts` ajettu ja testattu curlilla (vanhat salasanat hylätään, `?token=` hylätään, virheellinen Range → 416, julkinen data ei vuoda).
+- **Android:** käännetään GitHub Actionsissa (`.github/workflows/android.yml`). Käännös onnistuu, ja asennettava debug-APK tallentuu ajon artefaktiksi (Actions → Android APK → Artifacts → `hummapp-debug-apk`).
 
 ## Käyttöönotossa huomioitavaa
 

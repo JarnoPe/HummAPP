@@ -34,7 +34,7 @@ Tunnuksia ei ole esitäytetty sovellukseen eikä dokumentoitu tähän. Pääkäy
 
 ## Videoleikkeen ajoitus
 
-- Leike rajataan **5 s ennen ja 5 s jälkeen** NFC-leimauksen (talutuksessa hevonen on kameran edessä enintään noin 10 s).
+- Leike rajataan **5 s ennen ja 13 s jälkeen** NFC-leimauksen (yhteensä 18 s).
 - Sovellus tallentaa tagin **lukuhetken** heti luvussa ja lähettää sen millisekunnin tarkkuudella. Leike osuu oikeaan kohtaan, vaikka NFC-näkymä avautuisi vasta luvun jälkeen tai verkko olisi hidas.
 - **Puhelimen automaattisen ajan pitää olla päällä.** Palvelin tallentaa jokaiseen tapahtumaan puhelimen ja palvelimen kelloeron ja kirjaa varoituksen, jos ero on yli 2 s.
 - Ulkoiseen soittimeen avattava video käyttää lyhytikäistä, vain kyseiseen leikkeeseen kelpaavaa latauslinkkiä (`POST /api/video-clips/{id}/download-link`). Kirjautumistokenia ei laiteta URL:iin.

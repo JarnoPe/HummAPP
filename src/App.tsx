@@ -232,7 +232,7 @@ export default function App() {
   const latestAir = airReadings[0] ?? null;
   const todayStr = localDateKey();
   const clipBefore = data?.clip_seconds_before ?? 5;
-  const clipAfter = data?.clip_seconds_after ?? 5;
+  const clipAfter = data?.clip_seconds_after ?? 13;
   const todayWater = waterDaily.find((d) => d.date === todayStr) ?? waterDaily[waterDaily.length - 1];
   const todayLiters = todayWater ? todayWater.total_liters : 0;
   const todayDrinkCount = todayWater ? todayWater.measurement_count : 0;

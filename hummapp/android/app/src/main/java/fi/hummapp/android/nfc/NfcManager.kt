@@ -19,7 +19,7 @@ class NfcManager(private val context: Context) {
     private val debounceWindowMs = 5000L
 
     /**
-     * Viimeisimmän hyväksytyn tagiluvun hetki (epoch ms). Videoleike (5 s + 5 s) rajataan
+     * Viimeisimmän hyväksytyn tagiluvun hetki (epoch ms). Videoleike (5 s + 13 s) rajataan
      * tämän hetken ympäriltä, joten aika otetaan talteen heti luvussa eikä vasta lähetettäessä.
      */
     var lastReadAtMillis: Long = 0L

@@ -1,7 +1,7 @@
 # HummAPP - Hevosten Hyvinvointi- ja Talliseuranta
 ### Valmis Synology NAS -pilottijärjestelmä ja Android-sovellus
 
-HummAPP on hevosalan tutkimus- ja hankepilottikäyttöön suunniteltu kevyt, luotettava ja ylläpidettävä seurantajärjestelmä. Järjestelmä kokoaa yhteen talliolosuhteet, hevosten muistiinpanot, riimutagin NFC-tunnistukseen perustuvan automaattisen videoleikkauksen (10 s leikkeet valvontakamerasta FFmpegillä), liikeanalyysitulokset sekä ainoana automaattimittauksena **Antero-hevosen juomamäärät**.
+HummAPP on hevosalan tutkimus- ja hankepilottikäyttöön suunniteltu kevyt, luotettava ja ylläpidettävä seurantajärjestelmä. Järjestelmä kokoaa yhteen talliolosuhteet, hevosten muistiinpanot, riimutagin NFC-tunnistukseen perustuvan automaattisen videoleikkauksen (18 s leikkeet valvontakamerasta FFmpegillä), liikeanalyysitulokset sekä ainoana automaattimittauksena **Antero-hevosen juomamäärät**.
 
 Tämä paketti on suunniteltu suoraan ajettavaksi **Synology NAS** -verkkolevypalvelimella **Container Managerilla (Docker Compose)** yhtenä ainoana kevyenä konttina ilman raskaita mikropalveluja, Redisiä tai erillisiä tietokantapalvelimia.
 
@@ -46,7 +46,7 @@ Tämä paketti on suunniteltu suoraan ajettavaksi **Synology NAS** -verkkolevypa
 ## 1. Järjestelmän tarkoitus
 HummAPP kerää, tallentaa ja esittää hevosten hyvinvointiin ja talliolosuhteisiin liittyvää dataa hankepilottia varten:
 - **Hevostiedot ja muistiinpanot**: Havainnot, terveysmerkinnät ja toimenpiteet talliympäristössä.
-- **NFC-videointitapahtumat**: Kun hevonen talutetaan kuvausalueelle, Android-puhelimella luetaan riimutagi. NAS leikkaa valvontakameran tallenteesta 10 sekunnin leikkeen (5 s ennen lukuhetkeä ja 5 s lukuhetken jälkeen). Talutuksessa hevonen on kameran edessä enintään noin 10 sekuntia, jonka jälkeen kuvaan tulee jo seuraava eläin, joten pidempi leike sisältäisi väärän hevosen. Rajaus säädetään `.env`-muuttujilla `VIDEO_SECONDS_BEFORE` ja `VIDEO_SECONDS_AFTER`.
+- **NFC-videointitapahtumat**: Kun hevonen talutetaan kuvausalueelle, Android-puhelimella luetaan riimutagi. NAS leikkaa valvontakameran tallenteesta 18 sekunnin leikkeen (5 s ennen lukuhetkeä ja 13 s lukuhetken jälkeen). Rajaus on lyhyt, koska talutuksessa kameran eteen tulee pian jo seuraava eläin, ja pidempi leike sisältäisi väärän hevosen. Rajaus säädetään `.env`-muuttujilla `VIDEO_SECONDS_BEFORE` ja `VIDEO_SECONDS_AFTER`.
 - **Videon tarkastus**: Leikkeen katsominen, hyväksyminen (`APPROVED`) tai hylkääminen (`REJECTED`).
 - **Liikeanalyysit**: Ulkoisen analyysipalvelun tulosten manuaalinen tallennus hevoselle ja leikkeelle.
 - **Juomisseuranta**: **Vain Antero-hevosella** on juoma-automaatti. Muiden hevosten juomista ei mitata, eikä järjestelmässä tarvita monimutkaista water-ID -hallintaa.
@@ -72,7 +72,7 @@ HummAPP kerää, tallentaa ja esittää hevosten hyvinvointiin ja talliolosuhtei
 │  │         HUMMAPP YKSIKKÖKONTTI (Docker)           │  │
 │  │  • FastAPI (Python 3.11) + Uvicorn               │  │
 │  │  • SQLite (WAL-tila) SQLAlchemylla                │  │
-│  │  • FFmpeg taustaleikkuri (10s leikkeet, 5s+5s)   │  │
+│  │  • FFmpeg taustaleikkuri (18s leikkeet, 5s+13s)  │  │
 │  │  • APScheduler (Anteron juomisen & ilman haku)   │  │
 │  │  • Web UI (Jinja2 + Tailwind + Chart.js + HTMX)  │  │
 │  └──────────┬─────────────────┬───────────────────┬─┘  │
@@ -267,7 +267,7 @@ Tämä suojaa videovalvontajärjestelmän tiedostoja luvattomalta muokkaukselta.
 ---
 
 ## 18. Kameran tiedostonimimallin sovittaminen (Video Source Resolver)
-Leike on vain 10 sekuntia (5 s + 5 s), joten aikojen täytyy täsmätä sekunnin tarkkuudella. Tiedostossa `app/services/video_source_resolver.py` on luokka `SynologyTimestampVideoResolver`, joka:
+Leike on vain 18 sekuntia (5 s + 13 s), joten aikojen täytyy täsmätä sekunnin tarkkuudella. Tiedostossa `app/services/video_source_resolver.py` on luokka `SynologyTimestampVideoResolver`, joka:
 
 1. Lukee aikaleiman tiedostonimestä (esim. `CAM01_20261117_120000.mp4` tai Surveillance Stationin `Kamera-20261117-120000-1795420800.mp4`).
 2. **Tulkitsee aikaleiman kameran aikavyöhykkeessä** (`CAMERA_TIMEZONE`, oletus `Europe/Helsinki`). Jos kamerasi nimeää tiedostot UTC-ajassa, aseta `CAMERA_TIMEZONE=UTC`.
@@ -290,7 +290,7 @@ Jos kamerasi käyttää muuta nimeämistapaa, säädä `FILENAME_TIMESTAMP`-sä�
 3. Käyttöliittymässä on sivut:
    - **Katsaus** (`/`): Tallin pikanäkymät, Anteron 24h juomakuvaaja, tuoreimmat leikkeet ja ilmanlaatu.
    - **Hevoset** (`/web/horses`): Hevosrekisteri, NFC-kytkennät ja hevoskohtainen sivu muistiinpanoineen.
-   - **NFC & Videot** (`/web/nfc-events`): Kaikki leikatut 10 s videot (testisignaalivideot merkitty `TESTIVIDEO`), hyväksyntä (`Hyväksy`), hylkäys (`Hylkää`) ja ylläpidon poisto.
+   - **NFC & Videot** (`/web/nfc-events`): Kaikki leikatut 18 s videot (testisignaalivideot merkitty `TESTIVIDEO`), hyväksyntä (`Hyväksy`), hylkäys (`Hylkää`) ja ylläpidon poisto.
    - **Juominen** (`/web/water`): Anteron juomahistoria, vuorokausitilastot ja Chart.js -kuvaaja.
    - **Talli-ilma** (`/web/air`): Lämpötila, kosteus, NH3, CO2 ja hiukkaset.
    - **Järjestelmä** (`/web/system`, vain admin): Tietokannan WAL-tila, hakemistojen eheys, leikeasetukset ja hälytysloki.

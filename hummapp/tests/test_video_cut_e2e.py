@@ -1,4 +1,4 @@
-"""Päästä päähän: oikea FFmpeg leikkaa 10 s leikkeen paikallisaikaan nimetystä kameratiedostosta."""
+"""Päästä päähän: oikea FFmpeg leikkaa 18 s (5 s + 13 s) leikkeen paikallisaikaan nimetystä kameratiedostosta."""
 import asyncio
 import datetime
 import shutil
@@ -16,7 +16,7 @@ from app.services.video_source_resolver import SynologyTimestampVideoResolver, f
 pytestmark = pytest.mark.skipif(not shutil.which("ffmpeg") or not shutil.which("ffprobe"), reason="FFmpeg puuttuu")
 
 
-def test_cut_produces_10s_clip_without_blocking(db_session, tmp_path, monkeypatch):
+def test_cut_produces_configured_clip_without_blocking(db_session, tmp_path, monkeypatch):
     camera = tmp_path / "camera"
     camera.mkdir()
     # 60 s kameratallenne, joka alkaa 12:00:00 Helsingin aikaa (= 10:00:00 UTC)
@@ -52,6 +52,7 @@ def test_cut_produces_10s_clip_without_blocking(db_session, tmp_path, monkeypatc
     assert event.status == "READY", event.error_message
     clip = db_session.query(VideoClip).filter_by(nfc_event_id=event.id).one()
     out = Path(settings.VIDEO_OUTPUT_PATH) / clip.relative_file_path
-    assert abs(ffprobe_duration(out) - 10.0) < 0.2
+    assert abs(ffprobe_duration(out) - settings.clip_duration_seconds) < 0.2
+    assert settings.clip_duration_seconds == 18
     assert clip.is_mock is False
     assert ticks > 3, "Event loop pysähtyi FFmpegin ajaksi"

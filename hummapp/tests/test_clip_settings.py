@@ -6,10 +6,10 @@ from app.services.video_source_resolver import VideoSourceMatch
 from app.timeutils import local_date_key, local_day_start_utc
 
 
-def test_default_clip_is_5s_before_and_5s_after():
+def test_default_clip_is_5s_before_and_13s_after():
     assert settings.VIDEO_SECONDS_BEFORE == 5
-    assert settings.VIDEO_SECONDS_AFTER == 5
-    assert settings.clip_duration_seconds == 10
+    assert settings.VIDEO_SECONDS_AFTER == 13
+    assert settings.clip_duration_seconds == 18
 
 
 def test_cut_command_uses_offset_and_duration(tmp_path):
@@ -21,7 +21,7 @@ def test_cut_command_uses_offset_and_duration(tmp_path):
 
 def test_mock_video_has_clip_length(tmp_path):
     cmd = build_mock_command(tmp_path / "out.mp4", settings.clip_duration_seconds)
-    assert "testsrc=duration=10:size=640x360:rate=25" in cmd
+    assert "testsrc=duration=18:size=640x360:rate=25" in cmd
 
 
 def test_local_day_starts_at_helsinki_midnight():

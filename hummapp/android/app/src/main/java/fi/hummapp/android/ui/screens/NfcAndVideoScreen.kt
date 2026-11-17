@@ -161,7 +161,7 @@ fun NfcAndVideoScreen(
                                     text = when {
                                         !nfcSupported -> "Laitteessa ei ole NFC-sirua (voit testata alta)."
                                         !nfcEnabled -> "NFC on pois päältä laitteen asetuksista."
-                                        else -> "Vie puhelin riimutagiin leikataksesi 10 s videon (5 s ennen ja 5 s jälkeen)."
+                                        else -> "Vie puhelin riimutagiin leikataksesi 18 s videon (5 s ennen ja 13 s jälkeen)."
                                     },
                                     fontSize = 12.sp,
                                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
@@ -286,7 +286,7 @@ fun NfcAndVideoScreen(
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Text("FFmpeg leikkaa videota (10s ennen + 40s jälkeen)...", fontSize = 12.sp)
+                                    Text("FFmpeg leikkaa videota (5 s ennen + 13 s jälkeen)...", fontSize = 12.sp)
                                 }
                             }
                             val clipId = ev.videoClipId

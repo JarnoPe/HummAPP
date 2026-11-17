@@ -1,8 +1,8 @@
 """
 NFC-tapahtuman videoleikkaus.
 
-Leike on oletuksena 5 s ennen ja 5 s jälkeen NFC-leimauksen (VIDEO_SECONDS_BEFORE /
-VIDEO_SECONDS_AFTER), koska talutuksessa hevonen on kameran edessä enintään ~10 s.
+Leike on oletuksena 5 s ennen ja 13 s jälkeen NFC-leimauksen (VIDEO_SECONDS_BEFORE /
+VIDEO_SECONDS_AFTER). Rajaus on lyhyt, koska talutuksessa kameran eteen tulee pian seuraava eläin.
 
 FFmpeg ja tiedostohaku ajetaan niin, etteivät ne pysäytä FastAPIn event looppia:
 FFmpeg asyncio-aliprosessina ja kamerahakemiston läpikäynti säikeessä.
@@ -54,7 +54,7 @@ def build_clip_relative_path(event: NfcEvent) -> str:
 
 def build_cut_command(match: VideoSourceMatch, destination: Path) -> List[str]:
     # -ss ennen -i: nopea haku. Uudelleenkoodaus takaa tarkan aloituskohdan myös
-    # avainkuvien välistä (tärkeää, kun leike on vain 10 s).
+    # avainkuvien välistä (tärkeää, kun leike on lyhyt).
     return [
         "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
         "-ss", f"{max(0.0, match.clip_start_offset_seconds):.3f}",

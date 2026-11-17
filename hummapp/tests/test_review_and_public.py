@@ -59,7 +59,7 @@ def test_public_overview_hides_personal_data(client, db_session):
     assert "Ontuu" not in text  # PUBLIC_INCLUDE_NOTES=false oletuksena
     assert "owner_name" not in body["horses"][0]
     assert body["horses"][0]["has_nfc_tag"] is True
-    assert body["clip_seconds_before"] == 5 and body["clip_seconds_after"] == 5
+    assert body["clip_seconds_before"] == 5 and body["clip_seconds_after"] == 13
 
 
 def test_system_status_requires_admin(client, db_session):

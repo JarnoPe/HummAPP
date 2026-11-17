@@ -16,9 +16,9 @@ const DRINKING_HORSE_NAME = process.env.DRINKING_HORSE_NAME || "Antero";
 const WATER_EXTERNAL_ID = process.env.WATER_EXTERNAL_ID || "WATER-METER-ANTERO-01";
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || "admin";
 
-// Talutuksessa hevonen on kameran edessä enintään ~10 s -> leike 5 s ennen + 5 s jälkeen leimauksen
+// Leike 5 s ennen + 13 s jälkeen NFC-leimauksen (säädettävissä ympäristömuuttujilla)
 const VIDEO_SECONDS_BEFORE = Number(process.env.VIDEO_SECONDS_BEFORE || 5);
-const VIDEO_SECONDS_AFTER = Number(process.env.VIDEO_SECONDS_AFTER || 5);
+const VIDEO_SECONDS_AFTER = Number(process.env.VIDEO_SECONDS_AFTER || 13);
 const CLIP_DURATION_SECONDS = VIDEO_SECONDS_BEFORE + VIDEO_SECONDS_AFTER;
 const LOCAL_TIMEZONE = process.env.APP_TIMEZONE || "Europe/Helsinki";
 // Videoissa näkyy taluttaja (henkilötieto) -> julkinen suoratoisto vain erikseen sallittuna
@@ -980,7 +980,7 @@ async function startServer() {
 
     const now = utcIsoNow();
     const tenSecAgo = utcIsoNow(-NFC_DEBOUNCE_SECONDS);
-    // Leike on vain 10 s -> puhelimen ja palvelimen kelloero tallennetaan ja siitä varoitetaan
+    // Leike on lyhyt (18 s) -> puhelimen ja palvelimen kelloero tallennetaan ja siitä varoitetaan
     const clockSkewSeconds = Number(((phoneDate.getTime() - Date.now()) / 1000).toFixed(1));
     if (Math.abs(clockSkewSeconds) > NFC_CLOCK_SKEW_WARNING_SECONDS) {
       console.warn(`[HummAPP] Puhelimen kello poikkeaa palvelimesta ${clockSkewSeconds} s (tagi ${uid}).`);
