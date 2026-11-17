@@ -7,9 +7,6 @@ on:
     paths:
       - "hummapp/android/**"
       - ".github/workflows/android.yml"
-  pull_request:
-    paths:
-      - "hummapp/android/**"
   workflow_dispatch:
 
 jobs:
@@ -26,10 +23,9 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - uses: android-actions/setup-android@v3
-
+      # GitHubin ubuntu-ajokoneessa Android SDK on valmiina ($ANDROID_HOME)
       - name: Android SDK -paketit
-        run: sdkmanager "platforms;android-34" "build-tools;34.0.0"
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0" > /dev/null
 
       - uses: gradle/actions/setup-gradle@v4
         with:
