@@ -1,10 +1,13 @@
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import List
+
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
+
+from app.auth import get_current_user, require_role
+from app.constants import EDITOR_ROLES
 from app.database import get_db
 from app.models import StableAirMeasurement, User
 from app.schemas import StableAirMeasurementResponse
-from app.auth import get_current_user, require_role
 from app.services.air_quality import air_quality_service
 
 router = APIRouter(prefix="/api/stable-air", tags=["Talli-ilman mittaukset"])
@@ -12,24 +15,23 @@ router = APIRouter(prefix="/api/stable-air", tags=["Talli-ilman mittaukset"])
 
 @router.get("", response_model=List[StableAirMeasurementResponse])
 def get_air_measurements(
-    limit: int = 50,
+    limit: int = Query(50, ge=1, le=1000),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Listaa tuoreimmat talli-ilman ja olosuhdemittausten lukemat."""
-    readings = (
+    return (
         db.query(StableAirMeasurement)
         .order_by(StableAirMeasurement.measured_at.desc())
         .limit(limit)
         .all()
     )
-    return readings
 
 
-@router.post("/sync", status_code=status.HTTP_200_OK)
+@router.post("/sync")
 async def sync_air_now(
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(["admin", "user"])),
+    current_user: User = Depends(require_role(EDITOR_ROLES)),
 ):
     """Käynnistää välittömän talli-ilman mittausten haun anturipalvelusta."""
     synced_count = await air_quality_service.sync_air_readings(db)

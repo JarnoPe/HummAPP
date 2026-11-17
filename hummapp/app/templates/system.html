@@ -79,7 +79,7 @@
                             {% endif %}
                         </td>
                         <td class="py-2 px-4 font-mono font-medium text-slate-700">{{ ev.event_type }}</td>
-                        <td class="py-2 px-4 text-slate-500">{{ ev.created_at.strftime('%d.%m.%Y %H:%M:%S') }}</td>
+                        <td class="py-2 px-4 text-slate-500">{{ ev.created_at|local_time('%d.%m.%Y %H:%M:%S') }}</td>
                         <td class="py-2 px-4 text-slate-800 font-mono text-[11px]">{{ ev.message }}</td>
                     </tr>
                     {% else %}

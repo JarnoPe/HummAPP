@@ -18,6 +18,13 @@ class NfcManager(private val context: Context) {
     private var lastScannedTime: Long = 0L
     private val debounceWindowMs = 5000L
 
+    /**
+     * Viimeisimmän hyväksytyn tagiluvun hetki (epoch ms). Videoleike (5 s + 5 s) rajataan
+     * tämän hetken ympäriltä, joten aika otetaan talteen heti luvussa eikä vasta lähetettäessä.
+     */
+    var lastReadAtMillis: Long = 0L
+        private set
+
     fun isNfcSupported(): Boolean = nfcAdapter != null
 
     fun isNfcEnabled(): Boolean = nfcAdapter?.isEnabled == true
@@ -74,6 +81,7 @@ class NfcManager(private val context: Context) {
 
         lastScannedUid = uidHex
         lastScannedTime = now
+        lastReadAtMillis = now
         return uidHex
     }
 

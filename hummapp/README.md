@@ -1,7 +1,7 @@
 # HummAPP - Hevosten Hyvinvointi- ja Talliseuranta
 ### Valmis Synology NAS -pilottijärjestelmä ja Android-sovellus
 
-HummAPP on hevosalan tutkimus- ja hankepilottikäyttöön suunniteltu kevyt, luotettava ja ylläpidettävä seurantajärjestelmä. Järjestelmä kokoaa yhteen talliolosuhteet, hevosten muistiinpanot, riimutagin NFC-tunnistukseen perustuvan automaattisen videoleikkauksen (50s leikkeet valvontakamerasta FFmpegillä), liikeanalyysitulokset sekä ainoana automaattimittauksena **Antero-hevosen juomamäärät**.
+HummAPP on hevosalan tutkimus- ja hankepilottikäyttöön suunniteltu kevyt, luotettava ja ylläpidettävä seurantajärjestelmä. Järjestelmä kokoaa yhteen talliolosuhteet, hevosten muistiinpanot, riimutagin NFC-tunnistukseen perustuvan automaattisen videoleikkauksen (10 s leikkeet valvontakamerasta FFmpegillä), liikeanalyysitulokset sekä ainoana automaattimittauksena **Antero-hevosen juomamäärät**.
 
 Tämä paketti on suunniteltu suoraan ajettavaksi **Synology NAS** -verkkolevypalvelimella **Container Managerilla (Docker Compose)** yhtenä ainoana kevyenä konttina ilman raskaita mikropalveluja, Redisiä tai erillisiä tietokantapalvelimia.
 
@@ -38,13 +38,15 @@ Tämä paketti on suunniteltu suoraan ajettavaksi **Synology NAS** -verkkolevypa
 28. [Sovelluksen päivittäminen](#28-sovelluksen-päivittäminen)
 29. [Turvallinen sammuttaminen](#29-turvallinen-sammuttaminen)
 30. [Tavallisimmat virhetilanteet ja vianetsintä](#30-tavallisimmat-virhetilanteet-ja-vianetsintä)
+31. [Julkinen rajapinta ja tietosuoja](#31-julkinen-rajapinta-ja-tietosuoja)
+32. [Kehittäjälle](#32-kehittäjälle)
 
 ---
 
 ## 1. Järjestelmän tarkoitus
 HummAPP kerää, tallentaa ja esittää hevosten hyvinvointiin ja talliolosuhteisiin liittyvää dataa hankepilottia varten:
 - **Hevostiedot ja muistiinpanot**: Havainnot, terveysmerkinnät ja toimenpiteet talliympäristössä.
-- **NFC-videointitapahtumat**: Kun hevonen talutetaan kuvausalueelle, Android-puhelimella luetaan riimutagi. NAS leikkaa valvontakameran tallenteesta 50 sekunnin leikkeen (10s ennen lukuhetkeä ja 40s lukuhetken jälkeen).
+- **NFC-videointitapahtumat**: Kun hevonen talutetaan kuvausalueelle, Android-puhelimella luetaan riimutagi. NAS leikkaa valvontakameran tallenteesta 10 sekunnin leikkeen (5 s ennen lukuhetkeä ja 5 s lukuhetken jälkeen). Talutuksessa hevonen on kameran edessä enintään noin 10 sekuntia, jonka jälkeen kuvaan tulee jo seuraava eläin, joten pidempi leike sisältäisi väärän hevosen. Rajaus säädetään `.env`-muuttujilla `VIDEO_SECONDS_BEFORE` ja `VIDEO_SECONDS_AFTER`.
 - **Videon tarkastus**: Leikkeen katsominen, hyväksyminen (`APPROVED`) tai hylkääminen (`REJECTED`).
 - **Liikeanalyysit**: Ulkoisen analyysipalvelun tulosten manuaalinen tallennus hevoselle ja leikkeelle.
 - **Juomisseuranta**: **Vain Antero-hevosella** on juoma-automaatti. Muiden hevosten juomista ei mitata, eikä järjestelmässä tarvita monimutkaista water-ID -hallintaa.
@@ -70,7 +72,7 @@ HummAPP kerää, tallentaa ja esittää hevosten hyvinvointiin ja talliolosuhtei
 │  │         HUMMAPP YKSIKKÖKONTTI (Docker)           │  │
 │  │  • FastAPI (Python 3.11) + Uvicorn               │  │
 │  │  • SQLite (WAL-tila) SQLAlchemylla                │  │
-│  │  • FFmpeg taustaleikkuri (50s leikkeet)          │  │
+│  │  • FFmpeg taustaleikkuri (10s leikkeet, 5s+5s)   │  │
 │  │  • APScheduler (Anteron juomisen & ilman haku)   │  │
 │  │  • Web UI (Jinja2 + Tailwind + Chart.js + HTMX)  │  │
 │  └──────────┬─────────────────┬───────────────────┬─┘  │
@@ -169,6 +171,7 @@ Kopioi tulos `.env`-tiedoston kohtaan:
 ```env
 SECRET_KEY=tahan-luotu-pitka-hex-merkkijono
 ```
+> **Pakollinen.** Sovellus ei käynnisty, jos `SECRET_KEY` puuttuu, on alle 32 merkkiä tai on `.env.example`-tiedoston esimerkkiarvo. Näin julkisesti tunnetulla avaimella ei voi vahingossa ajaa tuotantoa (tunnetulla avaimella kuka tahansa voisi väärentää admin-tokenin).
 
 ---
 
@@ -176,9 +179,9 @@ SECRET_KEY=tahan-luotu-pitka-hex-merkkijono
 Määritä `.env`-tiedostoon haluamasi pääkäyttäjätunnus ja salasana:
 ```env
 ADMIN_USERNAME=admin
-ADMIN_PASSWORD=VaihdaTamaSalasana2026!
+ADMIN_PASSWORD=oma-vahva-salasana-vahintaan-12-merkkia
 ```
-Sovellus luo tämän käyttäjän automaattisesti ensimmäisellä käynnistyksellä, jos kanta on tyhjä.
+Sovellus luo tämän käyttäjän automaattisesti ensimmäisellä käynnistyksellä, jos sitä ei vielä ole. `ADMIN_PASSWORD` on pakollinen (vähintään 12 merkkiä), eikä aiempia julkisesti dokumentoituja oletussalasanoja hyväksytä. Salasanan vaihto `.env`-tiedostossa ei muuta jo luodun käyttäjän salasanaa.
 
 ---
 
@@ -219,7 +222,7 @@ Tämä takaa, että luku- ja kirjoitusoperaatiot eivät lukitse toisiaan, ja jä
 
 ## 14. Anteron luominen ja tarkistaminen
 Pilotissa juoma-automaatti on **ainoastaan Anterolla**.
-- Kun sovellus käynnistyy, se varmistaa automaattisesti hevosen `Antero` olemassaolon.
+- Kun sovellus käynnistyy, se varmistaa automaattisesti hevosen `Antero` olemassaolon. NFC-tagia ei enää yhdistetä automaattisesti; yhdistä Anteron oikea tagi kohdan 16 mukaisesti. Testausta varten esimerkkihevosen *Valo* ja esimerkkitagit saa luotua asetuksella `SEED_DEMO_DATA=true`.
 - Voit tarkistaa tämän avaamalla selaimella Web UI:n sivun `http://NAS-IP:8000/web/horses`.
 - Jos haluat nimetä Anteron uudelleen tai asettaa toisen nimen, tee se `.env`-tiedostossa muuttujalla:
   `DRINKING_HORSE_NAME=Antero`
@@ -264,13 +267,20 @@ Tämä suojaa videovalvontajärjestelmän tiedostoja luvattomalta muokkaukselta.
 ---
 
 ## 18. Kameran tiedostonimimallin sovittaminen (Video Source Resolver)
-Kamerat tallentavat usein videoita leikkeinä (esim. `CAM01_YYYYMMDD_HHMMSS.mp4`).
-Tiedostossa `app/services/video_source_resolver.py` on eristetty luokka `SynologyTimestampVideoResolver`.
+Leike on vain 10 sekuntia (5 s + 5 s), joten aikojen täytyy täsmätä sekunnin tarkkuudella. Tiedostossa `app/services/video_source_resolver.py` on luokka `SynologyTimestampVideoResolver`, joka:
 
-Jos kamerasi käyttää poikkeavaa tiedostonimimuotoa:
-1. Katso esimerkkikoodi `app/services/video_source_resolver.py`.
-2. Säädä tarvittaessa säännöllistä lauseketta (regex) vastaamaan kamerasi nimeämistapaa.
-3. Testaa leikkausta luomalla NFC-tapahtuma.
+1. Lukee aikaleiman tiedostonimestä (esim. `CAM01_20261117_120000.mp4` tai Surveillance Stationin `Kamera-20261117-120000-1795420800.mp4`).
+2. **Tulkitsee aikaleiman kameran aikavyöhykkeessä** (`CAMERA_TIMEZONE`, oletus `Europe/Helsinki`). Jos kamerasi nimeää tiedostot UTC-ajassa, aseta `CAMERA_TIMEZONE=UTC`.
+3. Valitsee lähimmän ennen leikkeen alkua alkaneen tiedoston ja laskee leikkauskohdan sen alusta.
+4. Tarkistaa `ffprobe`-työkalulla, että tiedosto on luettavissa ja kattaa koko leikkeen. Kesken oleva tallenne odotetaan valmiiksi (`VIDEO_RETRY_INTERVAL_SECONDS` × `VIDEO_MAX_RETRIES`).
+5. Hakee ensin päiväkansioista (esim. `20261117AM`, `2026-11-17`, `2026/11/17`), jotta koko valvontahakemistoa ei käydä läpi joka kerta.
+
+**Tärkeää leikkeen osumatarkkuudelle:**
+- **Kellot:** Kameran, NASin ja tallipuhelimen kellot pitää synkronoida (NTP / puhelimen automaattinen aika). HummAPP tallentaa jokaiseen NFC-tapahtumaan puhelimen ja palvelimen kelloeron (`clock_skew_seconds`) ja kirjaa varoituksen, jos ero on yli `NFC_CLOCK_SKEW_WARNING_SECONDS` (oletus 2 s).
+- **Tallennepätkän pituus:** Kamera kirjoittaa MP4-tiedoston luettavaksi vasta pätkän lopussa. Lyhyet pätkät (esim. 1–5 min) nopeuttavat leikkeen valmistumista. Aseta odotusaika vähintään pätkän pituiseksi, esim. 5 min pätkille `VIDEO_RETRY_INTERVAL_SECONDS=12` ja `VIDEO_MAX_RETRIES=30`.
+- **Testivideo:** `ENABLE_MOCK_CAMERA_FALLBACK=true` korvaa puuttuvan tallenteen testisignaalivideolla. Käytä tätä vain testaukseen. Testivideot merkitään web-UI:ssa `TESTIVIDEO`-merkinnällä.
+
+Jos kamerasi käyttää muuta nimeämistapaa, säädä `FILENAME_TIMESTAMP`-säännöllistä lauseketta tai toteuta oma `VideoSourceResolverBase`-luokka. Aja `pytest tests/test_video_resolver.py`, kun muutat logiikkaa.
 
 ---
 
@@ -280,10 +290,10 @@ Jos kamerasi käyttää poikkeavaa tiedostonimimuotoa:
 3. Käyttöliittymässä on sivut:
    - **Katsaus** (`/`): Tallin pikanäkymät, Anteron 24h juomakuvaaja, tuoreimmat leikkeet ja ilmanlaatu.
    - **Hevoset** (`/web/horses`): Hevosrekisteri, NFC-kytkennät ja hevoskohtainen sivu muistiinpanoineen.
-   - **NFC & Videot** (`/web/nfc-events`): Kaikki leikatut 50s videot, hyväksyntä (`Hyväksy`), hylkäys (`Hylkää`) ja ylläpidon poisto.
+   - **NFC & Videot** (`/web/nfc-events`): Kaikki leikatut 10 s videot (testisignaalivideot merkitty `TESTIVIDEO`), hyväksyntä (`Hyväksy`), hylkäys (`Hylkää`) ja ylläpidon poisto.
    - **Juominen** (`/web/water`): Anteron juomahistoria, vuorokausitilastot ja Chart.js -kuvaaja.
    - **Talli-ilma** (`/web/air`): Lämpötila, kosteus, NH3, CO2 ja hiukkaset.
-   - **Järjestelmä** (`/web/system`): Tietokannan WAL-tila, hakemistojen eheys ja hälytysloki.
+   - **Järjestelmä** (`/web/system`, vain admin): Tietokannan WAL-tila, hakemistojen eheys, leikeasetukset ja hälytysloki.
 
 ---
 
@@ -355,10 +365,10 @@ Tarkista kontin kunto suorittamalla:
 ```bash
 bash /volume1/docker/hummapp/scripts/smoke_test.sh http://localhost:8000
 ```
-Skripti tarkistaa automaattisesti:
+Skripti lukee admin-salasanan `.env`-tiedostosta (tai kysyy sen) ja tarkistaa automaattisesti:
 - `/api/health` -kunnon
-- `/api/system/status` -diagnostiikan
 - Kirjautumisen ja JWT-tokenin muodostuksen
+- `/api/system/status` -diagnostiikan (vaatii admin-tokenin)
 - Hevoslistauksen
 - Anteron juomamittausten yhteenvedon
 - Talli-ilman mittaukset
@@ -429,11 +439,34 @@ docker compose down
 | :--- | :--- | :--- |
 | **UNKNOWN_TAG -virhe puhelimessa** | Luettua NFC-tagia ei ole yhdistetty yhteenkään hevoseen. | Avaa Web UI -> **Hevoset** ja yhdistä tagin UID haluamaasi hevoseen. Järjestelmä ei luo hevosia tuntemattomista tageista turvallisuussyistä. |
 | **Juomadataa ei kerry Anterolle** | 1) Hevosta `Antero` ei ole luotu tietokantaan, TAI<br>2) Ulkoisen laitteen ID ei vastaa `WATER_EXTERNAL_ID`-arvoa. | Tarkista Web UI -> **Järjestelmä** (`/web/system`). Varmista, että hevonen nimeltä Antero löytyy ja `.env`-tiedoston `WATER_EXTERNAL_ID` täsmää mittalaitteeseen. |
-| **Videoleikkaus epäonnistuu (FAILED)** | Kameran tallennetta ei löydy määritetyssä ajassa. | Tarkista `compose.yaml`:n kamerahakemiston liitos (`/camera:ro`). Jos testaat ilman kameraa, aseta `.env`-tiedostoon `ENABLE_MOCK_CAMERA_FALLBACK=true`. |
+| **Videoleikkaus epäonnistuu (FAILED)** | Kameran tallennetta ei löydy tai se ei valmistu odotusajassa. | Tarkista `compose.yaml`:n kamerahakemiston liitos (`/camera:ro`) ja `CAMERA_TIMEZONE`. Pidennä odotusaikaa kameran tallennepätkän pituiseksi (kohta 18). Jos testaat ilman kameraa, aseta `ENABLE_MOCK_CAMERA_FALLBACK=true`. |
 | **Permission Denied / Oikeusvirhe data-kansiossa** | Synology DSM:n kansio-oikeudet eivät salli kontin käyttäjän (UID 1000) kirjoitusta. | Aja NASin terminaalissa: `sudo chown -R 1000:1000 data videos logs backups` ja `sudo chmod -R 775 data videos logs backups`. |
 | **Database locked -virhe** | Tietokantaa yritetty käyttää ilman WAL-tilaa tai useasta prosessista. | HummAPP käyttää oletuksena `PRAGMA journal_mode=WAL` ja `busy_timeout=5000`. Varmista, ettei mikään ulkoinen ohjelma lukitse `hummapp.db`-tiedostoa samaan aikaan. |
+| **Leike näyttää väärän hevosen / väärän hetken** | Kameran, NASin tai puhelimen kello ei ole synkronoitu, tai `CAMERA_TIMEZONE` on väärä. | Tarkista NFC-tapahtuman `clock_skew_seconds` ja lokin kelloerovaroitukset. Ota NTP käyttöön kamerassa ja NASissa ja automaattinen aika puhelimessa. Tarkista, nimeääkö kamera tiedostot paikallis- vai UTC-ajassa. |
+| **Sovellus ei käynnisty: SECRET_KEY / ADMIN_PASSWORD** | Pakollinen arvo puuttuu tai on esimerkkiarvo. | Täytä `.env`-tiedostoon oma `SECRET_KEY` (`openssl rand -hex 32`) ja vähintään 12-merkkinen `ADMIN_PASSWORD`. |
 | **Puhelin ei lue NFC-tagia** | Puhelimen NFC-siru on pois päältä tai suojakuori estää signaalin. | Tarkista puhelimen pika-asetuksista, että NFC on päällä. Vie tagi puhelimen yläosan antennialueelle. |
 | **Path Traversal estetty** | Käyttäjä tai ulkoinen kutsu yrittänyt viitata videohakemiston ulkopuolelle. | Järjestelmä estää `..`-viittaukset ja sallii vain polut, jotka pysyvät `/videos`-kansiossa. |
+
+---
+
+## 31. Julkinen rajapinta ja tietosuoja
+`/api/public/overview` on kirjautumaton vain luku -rajapinta hummapp.fi-sivustolle. Se on rajattu tarkoituksella, eikä palauta:
+- hevosten omistajien nimiä (henkilötieto)
+- NFC-tagien UID-tunnisteita (tagin voisi kloonata)
+- käyttäjätunnuksia tai mittausten raakadataa
+- muistiinpanoja, ellei `PUBLIC_INCLUDE_NOTES=true` (muistiinpanot voivat sisältää terveysmerkintöjä)
+
+Videoleikkeitä ei jaeta julkisesti, koska taluttaja näkyy kuvassa. Julkiselle sivustolle tarvitaan CORS-asetus, esim. `ALLOWED_ORIGINS=https://hummapp.fi`.
+
+## 32. Kehittäjälle
+```bash
+pip install -r requirements-dev.txt
+pytest            # yksikkö- ja integraatiotestit (videoleikkaustesti vaatii ffmpegin)
+ruff check app tests --select F
+```
+Rakenne: `app/api/` (REST), `app/web/` (Jinja-käyttöliittymä), `app/services/` (yhteinen liiketoimintalogiikka), `app/providers/` (ulkoiset mittauspalvelut), `app/startup.py`, `app/scheduler.py`, `app/migrations.py`.
+
+> Repon juuren `server.ts` on AI Studio -demoympäristön Node-toteutus samasta rajapinnasta. Tuotantoversio on tämä FastAPI-sovellus. Kun muutat rajapintaa, päivitä molemmat tai poista demo-backend.
 
 ---
 **HummAPP Pilotti** &bull; Valmis hevosseurantaratkaisu Synology NAS -ympäristöön.

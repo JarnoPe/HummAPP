@@ -1,11 +1,12 @@
-import datetime
 import logging
-from typing import Optional, List
+from typing import Optional
+
 from sqlalchemy.orm import Session
-from app.config import settings
+
 from app.models import StableAirMeasurement
 from app.providers.air_base import AbstractAirQualityProvider, AirMeasurementDTO
 from app.providers.air_mock import MockAirQualityProvider
+from app.timeutils import to_naive_utc
 
 logger = logging.getLogger(__name__)
 
@@ -14,15 +15,26 @@ class AirQualityService:
     def __init__(self, provider: Optional[AbstractAirQualityProvider] = None):
         self.provider = provider or MockAirQualityProvider()
 
-    def save_reading_dto(self, dto: AirMeasurementDTO, db: Session) -> StableAirMeasurement:
-        measured_time = dto.measured_at
-        if measured_time.tzinfo is not None:
-            measured_time = measured_time.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+    @staticmethod
+    def _is_duplicate(db: Session, dto: AirMeasurementDTO) -> bool:
+        return (
+            db.query(StableAirMeasurement.id)
+            .filter(
+                StableAirMeasurement.sensor_id == dto.sensor_id,
+                StableAirMeasurement.measured_at == to_naive_utc(dto.measured_at),
+            )
+            .first()
+            is not None
+        )
 
+    def save_reading_dto(self, dto: AirMeasurementDTO, db: Session, commit: bool = True) -> Optional[StableAirMeasurement]:
+        """Tallentaa lukeman. Sama anturi + sama mittausaika tallennetaan vain kerran."""
+        if self._is_duplicate(db, dto):
+            return None
         record = StableAirMeasurement(
             sensor_id=dto.sensor_id,
             location=dto.location,
-            measured_at=measured_time,
+            measured_at=to_naive_utc(dto.measured_at),
             temperature=dto.temperature,
             humidity=dto.humidity,
             ammonia=dto.ammonia,
@@ -31,23 +43,22 @@ class AirQualityService:
             raw_data_json=dto.raw_data_json,
         )
         db.add(record)
-        db.commit()
-        db.refresh(record)
+        if commit:
+            db.commit()
+            db.refresh(record)
         return record
 
     async def sync_air_readings(self, db: Session) -> int:
-        """Ajastettu haku talli-ilman mittauspalvelusta."""
+        """Hakee tuoreet lukemat ja tallentaa uudet yhtenä eränä. Palauttaa uusien rivien määrän."""
         try:
             readings = await self.provider.fetch_recent_readings()
-            count = 0
-            for dto in readings:
-                self.save_reading_dto(dto, db)
-                count += 1
-            logger.info(f"Talli-ilman mittaukset päivitetty: {count} mittausta tallennettu.")
-            return count
-        except Exception as e:
-            logger.exception(f"Virhe talli-ilman mittausten noudossa: {e}")
+        except Exception:
+            logger.exception("Virhe talli-ilman mittausten noudossa")
             return 0
+        count = sum(1 for dto in readings if self.save_reading_dto(dto, db, commit=False))
+        db.commit()
+        logger.info("Talli-ilman mittaukset päivitetty: %s uutta lukemaa.", count)
+        return count
 
 
 air_quality_service = AirQualityService()

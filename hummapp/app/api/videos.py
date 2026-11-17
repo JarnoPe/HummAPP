@@ -1,133 +1,107 @@
-import os
-from pathlib import Path
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
+
+from app.auth import (
+    create_video_link_token,
+    get_current_user,
+    get_token_from_request,
+    require_role,
+    user_from_token,
+    verify_video_link_token,
+)
+from app.config import settings
+from app.constants import ADMIN_ROLES, EDITOR_ROLES, ClipStatus
 from app.database import get_db
-from app.models import VideoClip, User, utc_now
-from app.schemas import VideoClipResponse
-from app.auth import get_current_user, require_role
+from app.models import User
+from app.schemas import VideoClipResponse, VideoLinkResponse
+from app.services import video_review
 from app.services.video import validate_and_resolve_video_path
 
 router = APIRouter(prefix="/api/video-clips", tags=["Videoleikkeet"])
 
 
-@router.get("/{id}", response_model=VideoClipResponse)
-def get_video_clip(
-    id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
+def _clip_or_404(db: Session, clip_id: int):
+    try:
+        return video_review.get_active_clip(db, clip_id)
+    except video_review.ClipNotFound:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Videoleikettä ei löydy.")
+
+
+@router.get("/{clip_id}", response_model=VideoClipResponse)
+def get_video_clip(clip_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Hakee videoleikkeen metatiedot ja tilan."""
-    clip = db.query(VideoClip).filter(VideoClip.id == id).first()
-    if not clip or clip.status == "DELETED":
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Videoleikettä ei löydy.")
-    return clip
+    return _clip_or_404(db, clip_id)
 
 
-@router.get("/{id}/download")
+@router.post("/{clip_id}/download-link", response_model=VideoLinkResponse)
+def create_download_link(clip_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """
+    Luo lyhytikäisen (VIDEO_LINK_EXPIRE_MINUTES) latauslinkin ulkoista videosoitinta varten.
+    Linkin token kelpaa vain tämän leikkeen lataamiseen, ei kirjautumiseen.
+    """
+    _clip_or_404(db, clip_id)
+    token = create_video_link_token(clip_id)
+    return VideoLinkResponse(
+        url=f"/api/video-clips/{clip_id}/download?sig={token}",
+        expires_in_seconds=settings.VIDEO_LINK_EXPIRE_MINUTES * 60,
+    )
+
+
+@router.get("/{clip_id}/download")
 def download_video_clip(
-    id: int,
+    clip_id: int,
+    request: Request,
+    sig: Optional[str] = None,
+    token: Optional[str] = Depends(get_token_from_request),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ):
     """
-    Lataa tai suoratoistaa videoleikkeen.
-    Suojattu Path Traversal -hyökkäyksiä vastaan.
+    Lataa tai suoratoistaa videoleikkeen (Range-tuki FileResponsessa).
+    Tunnistautuminen: Bearer-token, web-UI:n eväste tai /download-link -allekirjoitus.
     """
-    clip = db.query(VideoClip).filter(VideoClip.id == id).first()
-    if not clip or clip.status == "DELETED":
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Videoleikettä ei löydy.")
+    if not (user_from_token(token, db) or (sig and verify_video_link_token(sig, clip_id))):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Kirjautumistieto puuttuu tai se on vanhentunut")
 
+    clip = _clip_or_404(db, clip_id)
     try:
         file_path = validate_and_resolve_video_path(clip.relative_file_path)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-
     if not file_path.exists():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Videotiedostoa ei löydy levyltä.")
-
-    return FileResponse(
-        path=str(file_path),
-        media_type="video/mp4",
-        filename=file_path.name,
-    )
+    return FileResponse(path=str(file_path), media_type="video/mp4", filename=file_path.name)
 
 
-@router.post("/{id}/approve", response_model=VideoClipResponse)
-def approve_video_clip(
-    id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(["admin", "user"])),
-):
-    """
-    Käyttäjä hyväksyy videointikerran onnistuneeksi (APPROVED).
-    """
-    clip = db.query(VideoClip).filter(VideoClip.id == id).first()
-    if not clip or clip.status == "DELETED":
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Videoleikettä ei löydy.")
-
-    clip.status = "APPROVED"
-    clip.approved_at = utc_now()
-    clip.rejected_at = None
-
-    if clip.nfc_event:
-        clip.nfc_event.status = "APPROVED"
-
-    db.commit()
-    db.refresh(clip)
-    return clip
-
-
-@router.post("/{id}/reject", response_model=VideoClipResponse)
-def reject_video_clip(
-    id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(["admin", "user"])),
-):
-    """
-    Käyttäjä hylkää videointikerran (REJECTED).
-    Videon tiedostoa ei poisteta heti, vaan se siirretään pois aktiiviseurannasta
-    ja säilytetään turva-ajan mukaisesti.
-    """
-    clip = db.query(VideoClip).filter(VideoClip.id == id).first()
-    if not clip or clip.status == "DELETED":
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Videoleikettä ei löydy.")
-
-    clip.status = "REJECTED"
-    clip.rejected_at = utc_now()
-
-    if clip.nfc_event:
-        clip.nfc_event.status = "REJECTED"
-
-    db.commit()
-    db.refresh(clip)
-    return clip
-
-
-@router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_video_clip(
-    id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(["admin"])),
-):
-    """
-    Ylläpitäjän hallittu poistotoiminto.
-    Poistaa tiedoston levyltä turvallisesti vain sallitusta videohakemistosta.
-    """
-    clip = db.query(VideoClip).filter(VideoClip.id == id).first()
-    if not clip:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Videoleikettä ei löydy.")
-
+def _review(db: Session, clip_id: int, new_status: ClipStatus):
     try:
-        file_path = validate_and_resolve_video_path(clip.relative_file_path)
-        if file_path.exists():
-            file_path.unlink()
-    except Exception as e:
-        # Lokita poistovirhe mutta merkitse kantaan
-        pass
+        return video_review.set_review_status(db, clip_id, new_status)
+    except video_review.ClipNotFound:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Videoleikettä ei löydy.")
 
-    clip.status = "DELETED"
-    clip.deleted_at = utc_now()
-    db.commit()
+
+@router.post("/{clip_id}/approve", response_model=VideoClipResponse)
+def approve_video_clip(clip_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_role(EDITOR_ROLES))):
+    """Hyväksyy videointikerran onnistuneeksi (APPROVED)."""
+    return _review(db, clip_id, ClipStatus.APPROVED)
+
+
+@router.post("/{clip_id}/reject", response_model=VideoClipResponse)
+def reject_video_clip(clip_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_role(EDITOR_ROLES))):
+    """
+    Hylkää videointikerran (REJECTED). Tiedosto säilyy VIDEO_REJECTED_RETENTION_DAYS päivää,
+    minkä jälkeen ajastettu siivous poistaa sen.
+    """
+    return _review(db, clip_id, ClipStatus.REJECTED)
+
+
+@router.delete("/{clip_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_video_clip(clip_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_role(ADMIN_ROLES))):
+    """Ylläpitäjän poisto: tiedosto poistetaan levyltä vain sallitusta videohakemistosta."""
+    try:
+        video_review.delete_clip(db, clip_id)
+    except video_review.ClipNotFound:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Videoleikettä ei löydy.")
     return None

@@ -6,3 +6,18 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Ajonaikainen data – ei versionhallintaan (sisältää mm. salasanahasheja)
+data/
+videos/
+*.db
+*.db-wal
+*.db-shm
+logs/
+backups/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/

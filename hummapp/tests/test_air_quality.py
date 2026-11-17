@@ -1,7 +1,6 @@
 import datetime
 from app.services.air_quality import air_quality_service
 from app.providers.air_base import AirMeasurementDTO
-from app.models import StableAirMeasurement
 
 
 def test_stable_air_measurement_storage(db_session, client, auth_headers):

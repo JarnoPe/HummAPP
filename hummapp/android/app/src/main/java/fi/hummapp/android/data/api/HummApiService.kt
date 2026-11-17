@@ -60,6 +60,9 @@ interface HummApiService {
     @POST("/api/video-clips/{id}/reject")
     suspend fun rejectVideo(@Path("id") id: Int): Response<VideoClip>
 
+    @POST("/api/video-clips/{id}/download-link")
+    suspend fun createVideoDownloadLink(@Path("id") id: Int): Response<VideoDownloadLink>
+
     @GET("/api/horses/{id}/notes")
     suspend fun getHorseNotes(@Path("id") id: Int): Response<List<HorseNote>>
 

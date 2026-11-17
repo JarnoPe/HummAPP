@@ -29,9 +29,8 @@ class TokenManager(context: Context) {
         private const val KEY_USERNAME = "username"
         private const val KEY_ROLE = "role"
 
-        // Tämän live-ympäristön osoite (esikonfiguroitu valmiiksi)
+        // AI Studio -pilottiympäristön osoite (demo)
         const val ENV_SHARED_URL = "https://ais-pre-jjufdm4idfqg3xxnq6pytl-1003724038923.europe-west2.run.app"
-        const val ENV_DEV_URL = "https://ais-dev-jjufdm4idfqg3xxnq6pytl-1003724038923.europe-west2.run.app"
         const val NAS_DEFAULT_URL = "http://192.168.1.100:8000"
         const val DEFAULT_BASE_URL = ENV_SHARED_URL
     }

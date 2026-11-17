@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 from app.models import VideoClip, NfcEvent, utc_now
 from app.config import settings

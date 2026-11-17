@@ -7,13 +7,49 @@ import express from "express";
 import type { Request, Response, NextFunction } from "express";
 import { createServer as createViteServer } from "vite";
 
+// =============================================================================
+// HUOM: Tämä on AI Studio -demoympäristön Node-toteutus. Tuotantoversio on
+// hummapp/-kansion FastAPI-sovellus (Synology NAS). Pidä rajapinnat yhtenäisinä.
+// =============================================================================
 const PORT = Number(process.env.PORT || 3000);
-const SECRET_KEY =
-  process.env.SECRET_KEY || "hummapp-pilot-secret-key-change-in-production-32chars";
 const DRINKING_HORSE_NAME = process.env.DRINKING_HORSE_NAME || "Antero";
 const WATER_EXTERNAL_ID = process.env.WATER_EXTERNAL_ID || "WATER-METER-ANTERO-01";
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || "admin";
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "Tallipaallikko2026!";
+
+// Talutuksessa hevonen on kameran edessä enintään ~10 s -> leike 5 s ennen + 5 s jälkeen leimauksen
+const VIDEO_SECONDS_BEFORE = Number(process.env.VIDEO_SECONDS_BEFORE || 5);
+const VIDEO_SECONDS_AFTER = Number(process.env.VIDEO_SECONDS_AFTER || 5);
+const CLIP_DURATION_SECONDS = VIDEO_SECONDS_BEFORE + VIDEO_SECONDS_AFTER;
+const LOCAL_TIMEZONE = process.env.APP_TIMEZONE || "Europe/Helsinki";
+// Videoissa näkyy taluttaja (henkilötieto) -> julkinen suoratoisto vain erikseen sallittuna
+const PUBLIC_VIDEO_STREAM = process.env.PUBLIC_VIDEO_STREAM === "true";
+const VIDEO_LINK_EXPIRE_MINUTES = 10;
+const VIDEO_TOKEN_SCOPE = "video-download";
+const NFC_DEBOUNCE_SECONDS = 10;
+const NFC_CLOCK_SKEW_WARNING_SECONDS = 2;
+const NFC_UID_PATTERN = /^[0-9A-F]{8,20}$/;
+
+// Aiemmin julkisesti dokumentoidut oletussalasanat: näillä ei saa enää kirjautua
+const KNOWN_DEFAULT_PASSWORDS = ["Tallipaallikko2026!", "Tallipäällikkö2026!", "HummAPP2026!"];
+
+// SECRET_KEY: ympäristömuuttujasta tai satunnainen käynnistyskohtainen avain (tokenit vanhenevat uudelleenkäynnistyksessä)
+const SECRET_KEY = (() => {
+  const fromEnv = process.env.SECRET_KEY || "";
+  if (fromEnv.length >= 32) return fromEnv;
+  console.warn("[HummAPP] SECRET_KEY puuttuu tai on liian lyhyt -> käytetään satunnaista käynnistyskohtaista avainta.");
+  return crypto.randomBytes(32).toString("hex");
+})();
+
+// ADMIN_PASSWORD: ympäristömuuttujasta; jos puuttuu, luodaan satunnainen ja tulostetaan kerran lokiin
+function resolveAdminPassword(): string {
+  const fromEnv = process.env.ADMIN_PASSWORD || "";
+  if (fromEnv.length >= 12 && !KNOWN_DEFAULT_PASSWORDS.includes(fromEnv)) return fromEnv;
+  const generated = crypto.randomBytes(12).toString("base64url");
+  console.warn(
+    `[HummAPP] ADMIN_PASSWORD puuttuu tai on tunnettu oletussalasana. Luotu kertakäyttöinen salasana käyttäjälle '${ADMIN_USERNAME}': ${generated}`
+  );
+  return generated;
+}
 
 const DATA_DIR = path.resolve(process.cwd(), "data");
 const VIDEO_DIR = path.resolve(process.cwd(), "videos");
@@ -153,6 +189,12 @@ for (const [col, colType] of extraHorseCols) {
     db.exec(`ALTER TABLE horses ADD COLUMN ${col} ${colType};`);
   }
 }
+function addColumnIfMissing(table: string, column: string, definition: string) {
+  const cols = (db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).map((c) => c.name);
+  if (!cols.includes(column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition};`);
+}
+addColumnIfMissing("nfc_events", "clock_skew_seconds", "REAL");
+addColumnIfMissing("video_clips", "is_mock", "INTEGER NOT NULL DEFAULT 0");
 
 // --- Salasanan hajautus & JWT (HS256) ---
 function hashPassword(password: string): string {
@@ -190,10 +232,12 @@ function verifyJwt(token: string): Record<string, unknown> | null {
     const parts = token.split(".");
     if (parts.length !== 3) return null;
     const [header, body, sig] = parts;
-    const expectedSig = base64UrlEncode(
-      crypto.createHmac("sha256", SECRET_KEY).update(`${header}.${body}`).digest()
-    );
-    if (sig !== expectedSig) return null;
+    const headerJson = JSON.parse(Buffer.from(header, "base64url").toString("utf8")) as { alg?: string };
+    if (headerJson.alg !== "HS256") return null;
+    const expectedSig = crypto.createHmac("sha256", SECRET_KEY).update(`${header}.${body}`).digest();
+    const givenSig = Buffer.from(sig, "base64url");
+    // Ajallisesti vakio vertailu (aiemmin !==, joka vuotaa ajoitustietoa)
+    if (givenSig.length !== expectedSig.length || !crypto.timingSafeEqual(givenSig, expectedSig)) return null;
     const decoded = JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as Record<string, unknown>;
     if (typeof decoded.exp === "number" && decoded.exp < Math.floor(Date.now() / 1000)) {
       return null;
@@ -208,6 +252,78 @@ function utcIsoNow(offsetSeconds = 0): string {
   return new Date(Date.now() + offsetSeconds * 1000).toISOString();
 }
 
+// Päiväavain (YYYY-MM-DD) Suomen ajassa – "tänään" ja vuorokausisummat
+const localDateFormat = new Intl.DateTimeFormat("sv-SE", { timeZone: LOCAL_TIMEZONE });
+function localDateKey(iso: string): string {
+  return localDateFormat.format(new Date(iso));
+}
+
+function normalizeNfcUid(raw: unknown): string | null {
+  const cleaned = String(raw || "").replace(/[\s:-]/g, "").toUpperCase();
+  return NFC_UID_PATTERN.test(cleaned) ? cleaned : null;
+}
+
+// Range-otsakkeen validointi videoiden suoratoistoon. Palauttaa null, jos otsake on virheellinen.
+function parseRange(header: string, fileSize: number): { start: number; end: number } | null {
+  const match = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
+  if (!match || (match[1] === "" && match[2] === "")) return null;
+  let start: number;
+  let end: number;
+  if (match[1] === "") {
+    // Suffix-range: viimeiset N tavua
+    const suffix = Number(match[2]);
+    start = Math.max(0, fileSize - suffix);
+    end = fileSize - 1;
+  } else {
+    start = Number(match[1]);
+    end = match[2] === "" ? fileSize - 1 : Math.min(Number(match[2]), fileSize - 1);
+  }
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start > end || start >= fileSize) return null;
+  return { start, end };
+}
+
+function streamVideoFile(req: Request, res: Response, absPath: string) {
+  const fileSize = fs.statSync(absPath).size;
+  const rangeHeader = req.headers.range;
+  if (rangeHeader) {
+    const range = parseRange(rangeHeader, fileSize);
+    if (!range) {
+      res.writeHead(416, { "Content-Range": `bytes */${fileSize}` });
+      res.end();
+      return;
+    }
+    res.writeHead(206, {
+      "Content-Range": `bytes ${range.start}-${range.end}/${fileSize}`,
+      "Accept-Ranges": "bytes",
+      "Content-Length": range.end - range.start + 1,
+      "Content-Type": "video/mp4",
+    });
+    fs.createReadStream(absPath, { start: range.start, end: range.end }).pipe(res);
+    return;
+  }
+  res.writeHead(200, { "Content-Length": fileSize, "Content-Type": "video/mp4", "Accept-Ranges": "bytes" });
+  fs.createReadStream(absPath).pipe(res);
+}
+
+function waterDailySummary(horseId: number, days: number) {
+  const since = utcIsoNow(-(days + 1) * 86400);
+  const rows = db
+    .prepare("SELECT measured_at, liters FROM water_measurements WHERE horse_id = ? AND measured_at >= ? ORDER BY measured_at ASC")
+    .all(horseId, since) as Array<{ measured_at: string; liters: number }>;
+  const map = new Map<string, { total: number; count: number }>();
+  for (const r of rows) {
+    const dayKey = localDateKey(r.measured_at);
+    const prev = map.get(dayKey) || { total: 0, count: 0 };
+    prev.total += r.liters;
+    prev.count += 1;
+    map.set(dayKey, prev);
+  }
+  return Array.from(map.keys())
+    .sort()
+    .slice(-days)
+    .map((k) => ({ date: k, total_liters: Number(map.get(k)!.total.toFixed(1)), measurement_count: map.get(k)!.count }));
+}
+
 function validateAndResolveVideoPath(relativePath: string): string {
   if (!relativePath || relativePath.includes("..") || relativePath.startsWith("/") || relativePath.startsWith("\\")) {
     throw new Error("Luvaton suhteellinen polku (Path Traversal estetty).");
@@ -219,7 +335,7 @@ function validateAndResolveVideoPath(relativePath: string): string {
   return resolved;
 }
 
-function generateMockClipMp4(destPath: string, durationSec = 8): Promise<boolean> {
+function generateMockClipMp4(destPath: string, durationSec = CLIP_DURATION_SECONDS): Promise<boolean> {
   return new Promise((resolve) => {
     fs.mkdirSync(path.dirname(destPath), { recursive: true });
     const proc = spawn("ffmpeg", [
@@ -246,14 +362,37 @@ async function seedInitialData() {
   const now = utcIsoNow();
 
   // 1. Käyttäjät
-  const adminExists = db.prepare("SELECT id FROM users WHERE username = ?").get(ADMIN_USERNAME) as { id: number } | undefined;
-  if (!adminExists) {
+  const adminRow = db.prepare("SELECT id, password_hash FROM users WHERE username = ?").get(ADMIN_USERNAME) as
+    | { id: number; password_hash: string }
+    | undefined;
+  if (!adminRow) {
     db.prepare(
       "INSERT INTO users (username, password_hash, role, active, created_at) VALUES (?, ?, 'admin', 1, ?)"
-    ).run(ADMIN_USERNAME, hashPassword(ADMIN_PASSWORD), now);
-    db.prepare(
-      "INSERT INTO users (username, password_hash, role, active, created_at) VALUES (?, ?, 'user', 1, ?)"
-    ).run("tallityontekija", hashPassword("HummAPP2026!"), now);
+    ).run(ADMIN_USERNAME, hashPassword(resolveAdminPassword()), now);
+  }
+  // Demossa ympäristömuuttujan ADMIN_PASSWORD (jos asetettu) on aina admin-salasana -> lukituksen voi purkaa asettamalla sen
+  const envAdminPassword = process.env.ADMIN_PASSWORD || "";
+  if (adminRow && envAdminPassword.length >= 12 && !KNOWN_DEFAULT_PASSWORDS.includes(envAdminPassword)) {
+    if (!verifyPassword(envAdminPassword, adminRow.password_hash)) {
+      db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(hashPassword(envAdminPassword), adminRow.id);
+      console.warn(`[HummAPP] Käyttäjän '${ADMIN_USERNAME}' salasana päivitettiin ADMIN_PASSWORD-ympäristömuuttujasta.`);
+    }
+  }
+  // Vanhoissa demotietokannoissa on julkisesti dokumentoituja salasanoja: vaihdetaan / passivoidaan ne
+  const users = db.prepare("SELECT id, username, password_hash FROM users WHERE active = 1").all() as Array<{
+    id: number;
+    username: string;
+    password_hash: string;
+  }>;
+  for (const u of users) {
+    if (!KNOWN_DEFAULT_PASSWORDS.some((pw) => verifyPassword(pw, u.password_hash))) continue;
+    if (u.username === ADMIN_USERNAME) {
+      db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(hashPassword(resolveAdminPassword()), u.id);
+      console.warn(`[HummAPP] Käyttäjän '${u.username}' tunnettu oletussalasana vaihdettiin.`);
+    } else {
+      db.prepare("UPDATE users SET active = 0 WHERE id = ?").run(u.id);
+      console.warn(`[HummAPP] Käyttäjä '${u.username}' passivoitiin (julkisesti tunnettu oletussalasana).`);
+    }
   }
 
   // 2. Hevoset & NFC-tagit
@@ -407,9 +546,9 @@ async function seedInitialData() {
       .run(anteroId, "04A31B92C56F80", ev1Time, ev1Time);
     const ev1Id = Number(ev1.lastInsertRowid);
     const rel1 = `${anteroId}/2026/11/event_${ev1Id}_seed.mp4`;
-    await generateMockClipMp4(validateAndResolveVideoPath(rel1), 6);
+    await generateMockClipMp4(validateAndResolveVideoPath(rel1), CLIP_DURATION_SECONDS);
     db.prepare(
-      "INSERT INTO video_clips (nfc_event_id, relative_file_path, status, created_at, approved_at) VALUES (?, ?, 'APPROVED', ?, ?)"
+      "INSERT INTO video_clips (nfc_event_id, relative_file_path, status, created_at, approved_at, is_mock) VALUES (?, ?, 'APPROVED', ?, ?, 1)"
     ).run(ev1Id, rel1, ev1Time, ev1Time);
 
     const ev2Time = utcIsoNow(-1800);
@@ -420,9 +559,9 @@ async function seedInitialData() {
       .run(valoId, "04E24589F10123", ev2Time, ev2Time);
     const ev2Id = Number(ev2.lastInsertRowid);
     const rel2 = `${valoId}/2026/11/event_${ev2Id}_seed.mp4`;
-    await generateMockClipMp4(validateAndResolveVideoPath(rel2), 6);
+    await generateMockClipMp4(validateAndResolveVideoPath(rel2), CLIP_DURATION_SECONDS);
     db.prepare(
-      "INSERT INTO video_clips (nfc_event_id, relative_file_path, status, created_at) VALUES (?, ?, 'READY', ?)"
+      "INSERT INTO video_clips (nfc_event_id, relative_file_path, status, created_at, is_mock) VALUES (?, ?, 'READY', ?, 1)"
     ).run(ev2Id, rel2, ev2Time);
 
     db.prepare(
@@ -482,10 +621,8 @@ function getAuthToken(req: Request): string | null {
   if (authHeader && authHeader.startsWith("Bearer ")) {
     return authHeader.slice(7).trim();
   }
-  const queryToken = req.query.token;
-  if (typeof queryToken === "string" && queryToken.length > 0) {
-    return queryToken;
-  }
+  // Tokenia ei hyväksytä URL-parametrina (päätyisi lokeihin ja selainhistoriaan).
+  // Ulkoiselle soittimelle on lyhytikäinen /download-link.
   return null;
 }
 
@@ -496,7 +633,7 @@ function requireAuth(req: AuthedRequest, res: Response, next: NextFunction) {
     return;
   }
   const payload = verifyJwt(token);
-  if (!payload || typeof payload.sub !== "string") {
+  if (!payload || typeof payload.sub !== "string" || payload.scope) {
     res.status(401).json({ detail: "Virheellinen tai vanhentunut token" });
     return;
   }
@@ -594,14 +731,14 @@ async function startServer() {
     }
   });
 
-  app.get("/api/system/status", (_req: Request, res: Response) => {
+  app.get("/api/system/status", requireAuth, requireRole(["admin"]), (_req: Request, res: Response) => {
     const antero = db
       .prepare("SELECT id FROM horses WHERE name = ?")
       .get(DRINKING_HORSE_NAME) as { id: number } | undefined;
     res.json({
       status: antero ? "operational" : "attention_required",
       app_name: "HummAPP",
-      version: "1.0.0",
+      version: "1.1.0",
       database_ok: true,
       camera_dir_exists: true,
       video_dir_exists: fs.existsSync(VIDEO_DIR),
@@ -611,6 +748,9 @@ async function startServer() {
       water_external_id: WATER_EXTERNAL_ID,
       mock_water_enabled: true,
       mock_air_enabled: true,
+      mock_camera_fallback_enabled: true,
+      video_seconds_before: VIDEO_SECONDS_BEFORE,
+      video_seconds_after: VIDEO_SECONDS_AFTER,
       uptime_utc: utcIsoNow(),
     });
   });
@@ -825,18 +965,26 @@ async function startServer() {
   });
 
   app.post("/api/nfc-events", requireAuth, (req: AuthedRequest, res: Response) => {
-    const rawUid = String(req.body?.nfc_uid || "");
-    const uid = rawUid.replace(/[\s:]/g, "").toUpperCase();
-    const phoneTimestamp = String(req.body?.phone_timestamp || utcIsoNow());
-    const location = String(req.body?.location || "kuvausalue-1");
-
-    if (uid.length < 4) {
-      res.status(400).json({ detail: "Virheellinen NFC UID." });
+    const uid = normalizeNfcUid(req.body?.nfc_uid);
+    if (!uid) {
+      res.status(422).json({ detail: "NFC UID:n tulee olla 8–20 heksamerkkiä (esim. 04A31B92C56F80)." });
       return;
     }
+    const phoneDate = new Date(String(req.body?.phone_timestamp || ""));
+    if (Number.isNaN(phoneDate.getTime())) {
+      res.status(422).json({ detail: "phone_timestamp puuttuu tai on virheellinen (ISO 8601)." });
+      return;
+    }
+    const phoneTimestamp = phoneDate.toISOString();
+    const location = String(req.body?.location || "kuvausalue-1");
 
     const now = utcIsoNow();
-    const tenSecAgo = utcIsoNow(-10);
+    const tenSecAgo = utcIsoNow(-NFC_DEBOUNCE_SECONDS);
+    // Leike on vain 10 s -> puhelimen ja palvelimen kelloero tallennetaan ja siitä varoitetaan
+    const clockSkewSeconds = Number(((phoneDate.getTime() - Date.now()) / 1000).toFixed(1));
+    if (Math.abs(clockSkewSeconds) > NFC_CLOCK_SKEW_WARNING_SECONDS) {
+      console.warn(`[HummAPP] Puhelimen kello poikkeaa palvelimesta ${clockSkewSeconds} s (tagi ${uid}).`);
+    }
 
     // 1. Debounce-tarkistus (10 sekuntia)
     const duplicate = db
@@ -855,8 +1003,8 @@ async function startServer() {
 
     if (!tag) {
       db.prepare(
-        "INSERT INTO nfc_events (horse_id, nfc_uid, phone_timestamp, server_timestamp, user_id, location, status, error_message) VALUES (NULL, ?, ?, ?, ?, ?, 'FAILED', ?)"
-      ).run(uid, phoneTimestamp, now, req.user!.id, location, "UNKNOWN_TAG: Tagia ei ole yhdistetty hevoseen");
+        "INSERT INTO nfc_events (horse_id, nfc_uid, phone_timestamp, server_timestamp, user_id, location, status, error_message, clock_skew_seconds) VALUES (NULL, ?, ?, ?, ?, ?, 'FAILED', ?, ?)"
+      ).run(uid, phoneTimestamp, now, req.user!.id, location, "UNKNOWN_TAG: Tagia ei ole yhdistetty hevoseen", clockSkewSeconds);
       res.status(404).json({
         detail: "UNKNOWN_TAG: Luettua NFC-tagia ei ole yhdistetty yhteenkään hevoseen.",
       });
@@ -866,14 +1014,15 @@ async function startServer() {
     // 3. Luo tapahtuma ja käynnistä FFmpeg-taustaleikkaus
     const info = db
       .prepare(
-        "INSERT INTO nfc_events (horse_id, nfc_uid, phone_timestamp, server_timestamp, user_id, location, status) VALUES (?, ?, ?, ?, ?, ?, 'WAITING_FOR_RECORDING')"
+        "INSERT INTO nfc_events (horse_id, nfc_uid, phone_timestamp, server_timestamp, user_id, location, status, clock_skew_seconds) VALUES (?, ?, ?, ?, ?, ?, 'WAITING_FOR_RECORDING', ?)"
       )
-      .run(tag.horse_id, uid, phoneTimestamp, now, req.user!.id, location);
+      .run(tag.horse_id, uid, phoneTimestamp, now, req.user!.id, location, clockSkewSeconds);
 
     const eventId = Number(info.lastInsertRowid);
     const created = db.prepare("SELECT * FROM nfc_events WHERE id = ?").get(eventId) as Record<string, unknown>;
 
-    // Taustaprosessi: WAITING_FOR_RECORDING -> PROCESSING -> READY (FFmpeg MP4 luonti)
+    // Taustaprosessi: WAITING_FOR_RECORDING -> PROCESSING -> READY.
+    // Demossa ei ole kameraa, joten leike on aina testisignaalivideo (is_mock = 1).
     setTimeout(async () => {
       try {
         db.prepare("UPDATE nfc_events SET status = 'PROCESSING' WHERE id = ?").run(eventId);
@@ -882,10 +1031,10 @@ async function startServer() {
         const monthStr = String(dateObj.getUTCMonth() + 1).padStart(2, "0");
         const relPath = `${tag.horse_id}/${yearStr}/${monthStr}/event_${eventId}_${Date.now()}.mp4`;
         const absPath = validateAndResolveVideoPath(relPath);
-        const ok = await generateMockClipMp4(absPath, 8);
+        const ok = await generateMockClipMp4(absPath, CLIP_DURATION_SECONDS);
         if (ok) {
           db.prepare(
-            "INSERT INTO video_clips (nfc_event_id, relative_file_path, status, created_at) VALUES (?, ?, 'READY', ?)"
+            "INSERT INTO video_clips (nfc_event_id, relative_file_path, status, created_at, is_mock) VALUES (?, ?, 'READY', ?, 1)"
           ).run(eventId, relPath, utcIsoNow());
           db.prepare("UPDATE nfc_events SET status = 'READY' WHERE id = ?").run(eventId);
         } else {
@@ -928,8 +1077,39 @@ async function startServer() {
     res.json(clip);
   });
 
-  app.get("/api/video-clips/:id/download", requireAuth, (req: Request, res: Response) => {
-    const clip = db.prepare("SELECT * FROM video_clips WHERE id = ?").get(Number(req.params.id)) as
+  // Lyhytikäinen latauslinkki ulkoiselle videosoittimelle (token kelpaa vain tähän leikkeeseen)
+  app.post("/api/video-clips/:id/download-link", requireAuth, (req: Request, res: Response) => {
+    const clipId = Number(req.params.id);
+    const clip = db.prepare("SELECT id, status FROM video_clips WHERE id = ?").get(clipId) as
+      | { id: number; status: string }
+      | undefined;
+    if (!clip || clip.status === "DELETED") {
+      res.status(404).json({ detail: "Videoleikettä ei löydy." });
+      return;
+    }
+    const sig = signJwt({ scope: VIDEO_TOKEN_SCOPE, clip: clipId }, VIDEO_LINK_EXPIRE_MINUTES);
+    res.json({ url: `/api/video-clips/${clipId}/download?sig=${sig}`, expires_in_seconds: VIDEO_LINK_EXPIRE_MINUTES * 60 });
+  });
+
+  function isAuthorizedForClip(req: Request, clipId: number): boolean {
+    const sig = typeof req.query.sig === "string" ? req.query.sig : null;
+    if (sig) {
+      const payload = verifyJwt(sig);
+      if (payload && payload.scope === VIDEO_TOKEN_SCOPE && payload.clip === clipId) return true;
+    }
+    const token = getAuthToken(req);
+    const payload = token ? verifyJwt(token) : null;
+    if (!payload || typeof payload.sub !== "string" || payload.scope) return false;
+    return Boolean(db.prepare("SELECT id FROM users WHERE username = ? AND active = 1").get(payload.sub));
+  }
+
+  app.get("/api/video-clips/:id/download", (req: Request, res: Response) => {
+    const clipId = Number(req.params.id);
+    if (!isAuthorizedForClip(req, clipId)) {
+      res.status(401).json({ detail: "Kirjautumistieto puuttuu tai se on vanhentunut" });
+      return;
+    }
+    const clip = db.prepare("SELECT * FROM video_clips WHERE id = ?").get(clipId) as
       | { id: number; relative_file_path: string; status: string }
       | undefined;
     if (!clip || clip.status === "DELETED") {
@@ -947,31 +1127,7 @@ async function startServer() {
       res.status(404).json({ detail: "Videotiedostoa ei löydy levyltä." });
       return;
     }
-
-    const stat = fs.statSync(absPath);
-    const fileSize = stat.size;
-    const range = req.headers.range;
-    if (range) {
-      const parts = range.replace(/bytes=/, "").split("-");
-      const start = parseInt(parts[0], 10);
-      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-      const chunksize = end - start + 1;
-      const stream = fs.createReadStream(absPath, { start, end });
-      res.writeHead(206, {
-        "Content-Range": `bytes ${start}-${end}/${fileSize}`,
-        "Accept-Ranges": "bytes",
-        "Content-Length": chunksize,
-        "Content-Type": "video/mp4",
-      });
-      stream.pipe(res);
-    } else {
-      res.writeHead(200, {
-        "Content-Length": fileSize,
-        "Content-Type": "video/mp4",
-        "Accept-Ranges": "bytes",
-      });
-      fs.createReadStream(absPath).pipe(res);
-    }
+    streamVideoFile(req, res, absPath);
   });
 
   app.post("/api/video-clips/:id/approve", requireAuth, requireRole(["admin", "user"]), (req: Request, res: Response) => {
@@ -1141,26 +1297,7 @@ async function startServer() {
       res.json([]);
       return;
     }
-    const rows = db
-      .prepare("SELECT measured_at, liters FROM water_measurements WHERE horse_id = ? ORDER BY measured_at ASC")
-      .all(antero.id) as Array<{ measured_at: string; liters: number }>;
-
-    const map = new Map<string, { total: number; count: number }>();
-    for (const r of rows) {
-      const dayKey = r.measured_at.slice(0, 10);
-      const prev = map.get(dayKey) || { total: 0, count: 0 };
-      prev.total += r.liters;
-      prev.count += 1;
-      map.set(dayKey, prev);
-    }
-    const keys = Array.from(map.keys()).sort().slice(-days);
-    res.json(
-      keys.map((k) => ({
-        date: k,
-        total_liters: Number(map.get(k)!.total.toFixed(1)),
-        measurement_count: map.get(k)!.count,
-      }))
-    );
+    res.json(waterDailySummary(antero.id, days));
   });
 
   app.post("/api/water/sync", requireAuth, requireRole(["admin", "user"]), (_req: Request, res: Response) => {
@@ -1213,72 +1350,59 @@ async function startServer() {
   });
 
   // --- JULKINEN VAIN LUKU -RAJAPINTA (hummapp.fi) ---
-  // Huom: Ei sisällä autentikoituja käyttäjätietoja eikä minkäänlaisia muokkausreittejä.
+  // Rajattu samoin kuin FastAPI-versiossa: ei omistajien nimiä, NFC-tagien UID:itä,
+  // käyttäjätunnuksia, raakadataa eikä (oletuksena) muistiinpanoja.
+  const PUBLIC_INCLUDE_NOTES = process.env.PUBLIC_INCLUDE_NOTES === "true";
+
   app.get("/api/public/overview", (_req: Request, res: Response) => {
     const horsesRaw = db
       .prepare("SELECT * FROM horses WHERE active = 1 ORDER BY name ASC")
       .all() as Array<Record<string, unknown>>;
 
     const horses = horsesRaw.map((h) => {
-      const base = serializeHorse(h);
-      const notes = db
-        .prepare(
-          `SELECT n.id, n.horse_id, n.content, n.created_at, u.username as author_username
-           FROM horse_notes n
-           LEFT JOIN users u ON n.user_id = u.id
-           WHERE n.horse_id = ?
-           ORDER BY n.id DESC LIMIT 20`
-        )
-        .all(base.id);
+      const id = Number(h.id);
+      const tagCount = db.prepare("SELECT COUNT(*) AS cnt FROM nfc_tags WHERE horse_id = ? AND active = 1").get(id) as {
+        cnt: number;
+      };
+      const notes = PUBLIC_INCLUDE_NOTES
+        ? db
+            .prepare("SELECT id, horse_id, content, created_at FROM horse_notes WHERE horse_id = ? ORDER BY id DESC LIMIT 20")
+            .all(id)
+        : [];
       const analyses = db
         .prepare(
-          `SELECT id, horse_id, video_clip_id, analysis_method, analysis_timestamp, summary, result_json, status
-           FROM movement_analyses
-           WHERE horse_id = ?
-           ORDER BY id DESC LIMIT 20`
+          `SELECT id, horse_id, analysis_method, analysis_timestamp, summary, status
+           FROM movement_analyses WHERE horse_id = ? ORDER BY id DESC LIMIT 20`
         )
-        .all(base.id);
-      return { ...base, notes, analyses };
+        .all(id);
+      return {
+        id,
+        name: String(h.name),
+        breed: h.breed ? String(h.breed) : null,
+        birth_year: h.birth_year !== null && h.birth_year !== undefined ? Number(h.birth_year) : null,
+        stall_box: h.stall_box ? String(h.stall_box) : null,
+        description: h.description ? String(h.description) : null,
+        active: Boolean(h.active),
+        created_at: String(h.created_at),
+        has_nfc_tag: tagCount.cnt > 0,
+        notes,
+        analyses,
+      };
     });
 
     const antero = db
       .prepare("SELECT id FROM horses WHERE name = ?")
       .get(DRINKING_HORSE_NAME) as { id: number } | undefined;
 
-    let waterDaily: Array<{ date: string; total_liters: number; measurement_count: number }> = [];
-    if (antero) {
-      const rows = db
-        .prepare("SELECT measured_at, liters FROM water_measurements WHERE horse_id = ? ORDER BY measured_at ASC")
-        .all(antero.id) as Array<{ measured_at: string; liters: number }>;
-      const map = new Map<string, { total: number; count: number }>();
-      for (const r of rows) {
-        const dayKey = r.measured_at.slice(0, 10);
-        const prev = map.get(dayKey) || { total: 0, count: 0 };
-        prev.total += r.liters;
-        prev.count += 1;
-        map.set(dayKey, prev);
-      }
-      const keys = Array.from(map.keys()).sort().slice(-14);
-      waterDaily = keys.map((k) => ({
-        date: k,
-        total_liters: Number(map.get(k)!.total.toFixed(1)),
-        measurement_count: map.get(k)!.count,
-      }));
-    }
-
-    const waterMeasurements = db
-      .prepare(
-        `SELECT wm.id, wm.horse_id, wm.external_measurement_id, wm.external_water_id, wm.measured_at, wm.liters, wm.raw_data_json, h.name as horse_name
-         FROM water_measurements wm
-         LEFT JOIN horses h ON wm.horse_id = h.id
-         ORDER BY wm.measured_at DESC
-         LIMIT 30`
-      )
-      .all();
+    const waterMeasurements = antero
+      ? db
+          .prepare("SELECT id, measured_at, liters FROM water_measurements WHERE horse_id = ? ORDER BY measured_at DESC LIMIT 30")
+          .all(antero.id)
+      : [];
 
     const airReadings = db
       .prepare(
-        `SELECT id, sensor_id, location, measured_at, temperature, humidity, ammonia, co2, particulate_matter
+        `SELECT id, location, measured_at, temperature, humidity, ammonia, co2, particulate_matter
          FROM stable_air_measurements
          ORDER BY measured_at DESC, id DESC
          LIMIT 30`
@@ -1286,23 +1410,41 @@ async function startServer() {
       .all();
 
     const nfcEvents = db
-      .prepare("SELECT * FROM nfc_events ORDER BY id DESC LIMIT 25")
+      .prepare("SELECT * FROM nfc_events WHERE horse_id IS NOT NULL ORDER BY id DESC LIMIT 25")
       .all() as Array<Record<string, unknown>>;
 
     res.json({
       read_only: true,
       generated_at: utcIsoNow(),
-      water_external_id: WATER_EXTERNAL_ID,
       drinking_horse_name: DRINKING_HORSE_NAME,
+      clip_seconds_before: VIDEO_SECONDS_BEFORE,
+      clip_seconds_after: VIDEO_SECONDS_AFTER,
+      public_video_enabled: PUBLIC_VIDEO_STREAM,
       horses,
-      water_daily: waterDaily,
+      water_daily: antero ? waterDailySummary(antero.id, 14) : [],
       water_measurements: waterMeasurements,
       air_readings: airReadings,
-      nfc_events: nfcEvents.map(serializeNfcEvent),
+      nfc_events: nfcEvents.map((ev) => {
+        const full = serializeNfcEvent(ev);
+        return {
+          id: Number(ev.id),
+          horse_id: ev.horse_id === null ? null : Number(ev.horse_id),
+          horse_name: full.horse_name,
+          phone_timestamp: String(ev.phone_timestamp),
+          location: ev.location ? String(ev.location) : null,
+          status: String(ev.status),
+          video_clip_id: full.video_clip_id,
+          video_clip_status: full.video_clip_status,
+        };
+      }),
     });
   });
 
   app.get("/api/public/video-clips/:id/stream", (req: Request, res: Response) => {
+    if (!PUBLIC_VIDEO_STREAM) {
+      res.status(404).json({ detail: "Videoleikkeet eivät ole julkisia." });
+      return;
+    }
     const clip = db
       .prepare("SELECT * FROM video_clips WHERE id = ? AND status IN ('READY', 'APPROVED')")
       .get(Number(req.params.id)) as { id: number; relative_file_path: string; status: string } | undefined;
@@ -1321,31 +1463,7 @@ async function startServer() {
       res.status(404).json({ detail: "Videotiedostoa ei löydy." });
       return;
     }
-
-    const stat = fs.statSync(absPath);
-    const fileSize = stat.size;
-    const range = req.headers.range;
-    if (range) {
-      const parts = range.replace(/bytes=/, "").split("-");
-      const start = parseInt(parts[0], 10);
-      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-      const chunksize = end - start + 1;
-      const stream = fs.createReadStream(absPath, { start, end });
-      res.writeHead(206, {
-        "Content-Range": `bytes ${start}-${end}/${fileSize}`,
-        "Accept-Ranges": "bytes",
-        "Content-Length": chunksize,
-        "Content-Type": "video/mp4",
-      });
-      stream.pipe(res);
-    } else {
-      res.writeHead(200, {
-        "Content-Length": fileSize,
-        "Content-Type": "video/mp4",
-        "Accept-Ranges": "bytes",
-      });
-      fs.createReadStream(absPath).pipe(res);
-    }
+    streamVideoFile(req, res, absPath);
   });
 
   // --- Staattiset ZIP-lataukset (Android-sovellus ja täysi NAS-paketti) ---

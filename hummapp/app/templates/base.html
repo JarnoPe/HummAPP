@@ -45,7 +45,7 @@
                 <a href="/web/nfc-events" class="px-3 py-2 rounded-md hover:bg-[#135367] transition {% if active_page == 'events' %}bg-[#C60651] text-white{% else %}text-slate-100{% endif %}">NFC &amp; Videot</a>
                 <a href="/web/water" class="px-3 py-2 rounded-md hover:bg-[#135367] transition {% if active_page == 'water' %}bg-[#C60651] text-white{% else %}text-slate-100{% endif %}">Juominen (Antero)</a>
                 <a href="/web/air" class="px-3 py-2 rounded-md hover:bg-[#135367] transition {% if active_page == 'air' %}bg-[#C60651] text-white{% else %}text-slate-100{% endif %}">Talli-ilma</a>
-                <a href="/web/system" class="px-3 py-2 rounded-md hover:bg-[#135367] transition {% if active_page == 'system' %}bg-[#C60651] text-white{% else %}text-slate-100{% endif %}">Järjestelmä</a>
+                {% if current_user and current_user.role == 'admin' %}<a href="/web/system" class="px-3 py-2 rounded-md hover:bg-[#135367] transition {% if active_page == 'system' %}bg-[#C60651] text-white{% else %}text-slate-100{% endif %}">Järjestelmä</a>{% endif %}
             </nav>
             <div class="flex items-center space-x-4">
                 <div class="text-right text-xs hidden sm:block">

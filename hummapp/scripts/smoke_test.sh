@@ -11,7 +11,14 @@ set -e
 
 BASE_URL="${1:-http://localhost:8000}"
 ADMIN_USER="${ADMIN_USERNAME:-admin}"
-ADMIN_PASS="${ADMIN_PASSWORD:-Tallipaallikko2026!}"
+# Salasana luetaan ympäristöstä (.env) tai kysytään – sitä ei kovakoodata skriptiin
+if [ -z "${ADMIN_PASSWORD:-}" ] && [ -f .env ]; then
+    ADMIN_PASSWORD=$(grep -E '^ADMIN_PASSWORD=' .env | head -1 | cut -d= -f2-)
+fi
+if [ -z "${ADMIN_PASSWORD:-}" ]; then
+    read -r -s -p "Admin-salasana: " ADMIN_PASSWORD; echo
+fi
+ADMIN_PASS="$ADMIN_PASSWORD"
 
 echo "========================================================"
 echo "HummAPP NAS Smoke Test"
@@ -24,13 +31,8 @@ echo -n "1. Tarkistetaan /api/health... "
 HEALTH_RESP=$(curl -s -f "${BASE_URL}/api/health")
 echo "OK -> ${HEALTH_RESP}"
 
-# 2. Järjestelmätila (System Status)
-echo -n "2. Tarkistetaan /api/system/status... "
-STATUS_RESP=$(curl -s -f "${BASE_URL}/api/system/status")
-echo "OK"
-
 # 3. Kirjautuminen ja JWT-tokenin saaminen
-echo -n "3. Testataan kirjautuminen (/api/login)... "
+echo -n "2. Testataan kirjautuminen (/api/login)... "
 LOGIN_PAYLOAD=$(printf '{"username":"%s","password":"%s"}' "$ADMIN_USER" "$ADMIN_PASS")
 LOGIN_RESP=$(curl -s -X POST "${BASE_URL}/api/login" \
   -H "Content-Type: application/json" \
@@ -44,6 +46,11 @@ if [ -z "$TOKEN" ]; then
     exit 1
 fi
 echo "OK (Token vastaanotettu)"
+
+# Järjestelmätila (vaatii admin-tokenin)
+echo -n "3. Tarkistetaan /api/system/status... "
+STATUS_RESP=$(curl -s -f -H "Authorization: Bearer ${TOKEN}" "${BASE_URL}/api/system/status")
+echo "OK -> ${STATUS_RESP}"
 
 # 4. Hevoslistaus autentikoidulla pyynnöllä
 echo -n "4. Haetaan hevoset (/api/horses)... "

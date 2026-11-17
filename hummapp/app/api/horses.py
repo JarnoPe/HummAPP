@@ -1,12 +1,26 @@
 from typing import List
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+
+from app.auth import get_current_user, require_role
+from app.constants import EDITOR_ROLES
 from app.database import get_db
 from app.models import Horse, NfcTag, User
-from app.schemas import HorseCreate, HorseUpdate, HorseResponse, NfcTagCreate, NfcTagResponse
-from app.auth import get_current_user, require_role
+from app.schemas import HorseCreate, HorseResponse, HorseUpdate, NfcTagCreate, NfcTagResponse
+from app.services.horses import assign_nfc_tag as assign_tag_service
+from app.services.horses import clean_optional, find_horse_by_name
 
 router = APIRouter(prefix="/api/horses", tags=["Hevoset"])
+
+OPTIONAL_TEXT_FIELDS = ("breed", "owner_name", "stall_box", "description")
+
+
+def _get_horse_or_404(db: Session, horse_id: int) -> Horse:
+    horse = db.get(Horse, horse_id)
+    if not horse:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Hevosta ei löydy.")
+    return horse
 
 
 @router.get("", response_model=List[HorseResponse])
@@ -15,10 +29,10 @@ def list_horses(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Listaa kaikki järjestelmän hevoset."""
+    """Listaa järjestelmän hevoset."""
     query = db.query(Horse)
     if not include_inactive:
-        query = query.filter(Horse.active == True)
+        query = query.filter(Horse.active == True)  # noqa: E712
     return query.order_by(Horse.name.asc()).all()
 
 
@@ -26,23 +40,17 @@ def list_horses(
 def create_horse(
     horse_in: HorseCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(["admin", "user"])),
+    current_user: User = Depends(require_role(EDITOR_ROLES)),
 ):
     """Luo uuden hevosen järjestelmään."""
-    existing = db.query(Horse).filter(Horse.name == horse_in.name.strip()).first()
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Hevonen nimellä '{horse_in.name}' on jo olemassa.",
-        )
+    name = horse_in.name.strip()
+    if find_horse_by_name(db, name):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Hevonen nimellä '{name}' on jo olemassa.")
     horse = Horse(
-        name=horse_in.name.strip(),
-        breed=horse_in.breed.strip() if horse_in.breed else None,
+        name=name,
         birth_year=horse_in.birth_year,
-        owner_name=horse_in.owner_name.strip() if horse_in.owner_name else None,
-        stall_box=horse_in.stall_box.strip() if horse_in.stall_box else None,
-        description=horse_in.description.strip() if horse_in.description else None,
         active=True,
+        **{field: clean_optional(getattr(horse_in, field)) for field in OPTIONAL_TEXT_FIELDS},
     )
     db.add(horse)
     db.commit()
@@ -50,51 +58,40 @@ def create_horse(
     return horse
 
 
-@router.get("/{id}", response_model=HorseResponse)
+@router.get("/{horse_id}", response_model=HorseResponse)
 def get_horse(
-    id: int,
+    horse_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Hakee yksittäisen hevosen perustiedot."""
-    horse = db.query(Horse).filter(Horse.id == id).first()
-    if not horse:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Hevosta ei löydy.")
-    return horse
+    return _get_horse_or_404(db, horse_id)
 
 
-@router.put("/{id}", response_model=HorseResponse)
-@router.patch("/{id}", response_model=HorseResponse)
+@router.put("/{horse_id}", response_model=HorseResponse)
+@router.patch("/{horse_id}", response_model=HorseResponse)
 def update_horse(
-    id: int,
+    horse_id: int,
     horse_in: HorseUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(["admin", "user"])),
+    current_user: User = Depends(require_role(EDITOR_ROLES)),
 ):
-    """Päivittää hevosen perustiedot."""
-    horse = db.query(Horse).filter(Horse.id == id).first()
-    if not horse:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Hevosta ei löydy.")
+    """Päivittää hevosen perustiedot. Vain pyynnössä annetut kentät muuttuvat."""
+    horse = _get_horse_or_404(db, horse_id)
 
     if horse_in.name is not None:
-        cleaned_name = horse_in.name.strip()
-        if not cleaned_name:
+        name = horse_in.name.strip()
+        if not name:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Hevosen nimi ei voi olla tyhjä.")
-        dup = db.query(Horse).filter(Horse.name == cleaned_name, Horse.id != id).first()
-        if dup:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Hevonen nimellä '{cleaned_name}' on jo olemassa.")
-        horse.name = cleaned_name
+        if find_horse_by_name(db, name, exclude_id=horse_id):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Hevonen nimellä '{name}' on jo olemassa.")
+        horse.name = name
 
-    if "breed" in horse_in.model_fields_set:
-        horse.breed = horse_in.breed.strip() if horse_in.breed else None
+    for field in OPTIONAL_TEXT_FIELDS:
+        if field in horse_in.model_fields_set:
+            setattr(horse, field, clean_optional(getattr(horse_in, field)))
     if "birth_year" in horse_in.model_fields_set:
         horse.birth_year = horse_in.birth_year
-    if "owner_name" in horse_in.model_fields_set:
-        horse.owner_name = horse_in.owner_name.strip() if horse_in.owner_name else None
-    if "stall_box" in horse_in.model_fields_set:
-        horse.stall_box = horse_in.stall_box.strip() if horse_in.stall_box else None
-    if "description" in horse_in.model_fields_set:
-        horse.description = horse_in.description.strip() if horse_in.description else None
     if horse_in.active is not None:
         horse.active = horse_in.active
 
@@ -103,53 +100,23 @@ def update_horse(
     return horse
 
 
-@router.post("/{id}/nfc-tag", response_model=NfcTagResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/{horse_id}/nfc-tag", response_model=NfcTagResponse, status_code=status.HTTP_201_CREATED)
 def assign_nfc_tag(
-    id: int,
+    horse_id: int,
     tag_in: NfcTagCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(["admin", "user"])),
+    current_user: User = Depends(require_role(EDITOR_ROLES)),
 ):
-    """
-    Yhdistää passiivisen NFC-tagin UID-tunnisteen hevoseen.
-    Jos tagi on aiemmin ollut yhdistetty toiseen hevoseen, korjaa liitoksen turvallisesti.
-    """
-    horse = db.query(Horse).filter(Horse.id == id).first()
-    if not horse:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Hevosta ei löydy.")
-
-    uid = tag_in.nfc_uid.strip().upper()
-
-    # Tarkista onko tagi jo toisella hevosella
-    existing_tag = db.query(NfcTag).filter(NfcTag.nfc_uid == uid).first()
-    if existing_tag:
-        if existing_tag.horse_id == id:
-            # Jo samalla hevosella, aktivoidaan
-            existing_tag.active = True
-            db.commit()
-            db.refresh(existing_tag)
-            return existing_tag
-        else:
-            # Siirretään tagi tälle hevoselle (virheellisen yhdistämisen korjaaminen)
-            existing_tag.horse_id = id
-            existing_tag.active = True
-            db.commit()
-            db.refresh(existing_tag)
-            return existing_tag
-
-    new_tag = NfcTag(horse_id=id, nfc_uid=uid, active=True)
-    db.add(new_tag)
-    db.commit()
-    db.refresh(new_tag)
-    return new_tag
+    """Yhdistää NFC-tagin hevoseen. Toisella hevosella ollut tagi siirretään tälle (korjaus)."""
+    _get_horse_or_404(db, horse_id)
+    return assign_tag_service(db, horse_id, tag_in.nfc_uid)
 
 
-@router.get("/{id}/nfc-tag", response_model=List[NfcTagResponse])
+@router.get("/{horse_id}/nfc-tag", response_model=List[NfcTagResponse])
 def get_horse_nfc_tags(
-    id: int,
+    horse_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Listaa hevoseen yhdistetyt NFC-tagit."""
-    tags = db.query(NfcTag).filter(NfcTag.horse_id == id, NfcTag.active == True).all()
-    return tags
+    """Listaa hevoseen yhdistetyt aktiiviset NFC-tagit."""
+    return db.query(NfcTag).filter(NfcTag.horse_id == horse_id, NfcTag.active == True).all()  # noqa: E712
