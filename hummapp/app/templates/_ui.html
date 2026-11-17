@@ -1,0 +1,112 @@
+{# Yhteiset käyttöliittymämakrot #}
+
+{% macro status(code) -%}
+<span class="status status--{{ status_tone(code) }}">{{ status_label(code) }}</span>
+{%- endmacro %}
+
+{% macro flash_message(flash) -%}
+{% if flash %}
+<div class="flash flash--{{ flash.tone }}" role="{{ 'alert' if flash.tone == 'error' else 'status' }}">{{ flash.text }}</div>
+{% endif %}
+{%- endmacro %}
+
+{% macro bar_chart(chart, title, unit='L') -%}
+{% set today_bar = chart.bars[-1] %}
+<figure class="barchart" style="--cols: {{ chart.bars|length }}">
+    <div class="barchart__plot">
+        <svg class="chart" viewBox="0 0 {{ chart.width }} {{ chart.height - 22 }}" preserveAspectRatio="none" role="img" aria-label="{{ title }}: tänään {{ today_bar.value|num }} {{ unit }}{% if chart.average %}, aiempien päivien keskiarvo {{ chart.average|num }} {{ unit }}{% endif %}">
+            {% for g in chart.gridlines %}<line class="grid" x1="0" x2="{{ chart.width }}" y1="{{ g.y }}" y2="{{ g.y }}" vector-effect="non-scaling-stroke"></line>{% endfor %}
+            <line class="grid" x1="0" x2="{{ chart.width }}" y1="{{ chart.height - 22 }}" y2="{{ chart.height - 22 }}" vector-effect="non-scaling-stroke"></line>
+            {% for b in chart.bars %}
+            <rect class="bar{% if b.is_today %} bar--today{% endif %}" x="{{ b.x }}" y="{{ b.y }}" width="{{ b.width }}" height="{{ b.height }}"><title>{{ b.label }} {{ b.value|num }} {{ unit }}</title></rect>
+            {% endfor %}
+            {% if chart.average_y %}<line class="avg" x1="0" x2="{{ chart.width }}" y1="{{ chart.average_y }}" y2="{{ chart.average_y }}" vector-effect="non-scaling-stroke"></line>{% endif %}
+        </svg>
+        {% for g in chart.gridlines %}
+        <span class="barchart__grid" style="top: {{ (g.y / (chart.height - 22) * 100)|round(2) }}%">{{ g.label }} {{ unit }}</span>
+        {% endfor %}
+        {% if chart.average_y %}
+        <span class="barchart__avg" style="top: {{ (chart.average_y / (chart.height - 22) * 100)|round(2) }}%">ka. {{ chart.average|num }} {{ unit }}</span>
+        {% endif %}
+    </div>
+    <div class="barchart__axis" aria-hidden="true">
+        {% for b in chart.bars %}
+        <span{% if b.is_today %} class="is-today"{% endif %}>{% if b.is_today %}Tänään{% elif (chart.bars|length - loop.index) % 3 == 0 %}{{ b.label }}{% endif %}</span>
+        {% endfor %}
+    </div>
+    <figcaption class="chart-legend">
+        <span class="lg-today">Tänään</span>
+        <span class="lg-past">Aiemmat päivät</span>
+        {% if chart.average %}<span class="lg-avg">Aiempien päivien keskiarvo</span>{% endif %}
+    </figcaption>
+</figure>
+{%- endmacro %}
+
+{% macro sparkline(spark, label) -%}
+{% if spark %}
+<svg class="spark" viewBox="0 0 {{ spark.width }} {{ spark.height }}" preserveAspectRatio="none" role="img" aria-label="{{ label }}: kehitys viimeisimmistä lukemista">
+    {% if spark.band %}<rect class="band" x="0" y="{{ spark.band.y }}" width="{{ spark.width }}" height="{{ spark.band.height }}"></rect>{% endif %}
+    <polyline class="line" points="{{ spark.points }}" vector-effect="non-scaling-stroke"></polyline>
+    <circle class="dot" cx="{{ spark.last_x }}" cy="{{ spark.last_y }}" r="3.5"></circle>
+</svg>
+{% endif %}
+{%- endmacro %}
+
+{% macro clip_card(row, next_url, show_horse=True, preload=False) -%}
+{% set ev = row.event %}{% set clip = row.clip %}
+{% set code = clip.status if clip else ev.status %}
+{% set has_media = clip or status_tone(ev.status) == 'working' %}
+<li class="clip{{ '' if has_media else ' clip--nomedia' }}" data-tone="{{ status_tone(code) }}" data-clip-id="{{ clip.id if clip else '' }}" id="tapahtuma-{{ ev.id }}" tabindex="-1">
+    {% if has_media %}
+    <div class="clip__media">
+        {% if clip %}
+        <video controls preload="{{ 'metadata' if preload else 'none' }}" playsinline src="/api/video-clips/{{ clip.id }}/download"
+               aria-label="Videoleike: {{ ev.horse.name if ev.horse else 'tuntematon hevonen' }}, {{ ev.phone_timestamp|local_time('%d.%m. klo %H.%M') }}"></video>
+        {% elif status_tone(ev.status) == 'working' %}
+        <p class="clip__placeholder">Leikettä tehdään kameratallenteesta. Se ilmestyy tähän, kun tallenne on valmis.</p>
+        {% endif %}
+    </div>
+    {% endif %}
+    <div class="clip__info">
+        <div>
+            {% if show_horse %}
+            <div class="clip__horse">
+                {% if ev.horse %}<a href="/web/horses/{{ ev.horse.id }}">{{ ev.horse.name }}</a>{% else %}Tuntematon tagi{% endif %}
+            </div>
+            {% endif %}
+            <div class="clip__meta">
+                <span class="num">{{ ev.phone_timestamp|local_time('%d.%m.%Y klo %H.%M.%S') }}</span>
+                <span>{{ ev.location or 'kuvausalue-1' }}</span>
+                {% if not ev.horse %}<span>Tagi <code>{{ ev.nfc_uid }}</code></span>{% endif %}
+            </div>
+        </div>
+        <div class="clip__state">
+            <span data-role="status">{{ status(code) }}</span>
+            {% if clip and clip.is_mock %}<span class="tag-chip tag-chip--test" title="Kameratallennetta ei löytynyt, tämä on testisignaalivideo">TESTIVIDEO</span>{% endif %}
+            {% if clip and ev.error_message %}<p class="clip__error">{{ ev.error_message }}</p>{% endif %}
+            {% if not clip and event_error_text(ev.error_message) %}<p class="clip__error">{{ event_error_text(ev.error_message) }}</p>{% endif %}
+        </div>
+        {% if clip %}
+        <div class="clip__actions">
+            <form action="/web/video-clips/{{ clip.id }}/approve?next={{ next_url|urlencode }}" method="post" data-review="approve">
+                <button type="submit" class="btn btn--approve btn--block"{% if clip.status == 'APPROVED' %} hidden{% endif %}>Hyväksy <kbd aria-hidden="true">1</kbd></button>
+            </form>
+            <form action="/web/video-clips/{{ clip.id }}/reject?next={{ next_url|urlencode }}" method="post" data-review="reject">
+                <button type="submit" class="btn btn--reject btn--block"{% if clip.status == 'REJECTED' %} hidden{% endif %}>Hylkää <kbd aria-hidden="true">2</kbd></button>
+            </form>
+        </div>
+        <div class="clip__secondary">
+            <a class="btn btn--quiet" href="/api/video-clips/{{ clip.id }}/download" download>Lataa video</a>
+            {% if current_user.role == 'admin' %}
+            <form action="/web/video-clips/{{ clip.id }}/delete?next={{ next_url|urlencode }}" method="post"
+                  onsubmit="return confirm('Poistetaanko videotiedosto pysyvästi levyltä?')">
+                <button type="submit" class="btn btn--danger">Poista</button>
+            </form>
+            {% endif %}
+        </div>
+        {% elif not ev.horse %}
+        <div class="clip__actions"><a class="btn" href="/web/horses?tagi={{ ev.nfc_uid }}">Yhdistä tagi hevoseen</a></div>
+        {% endif %}
+    </div>
+</li>
+{%- endmacro %}

@@ -1,159 +1,98 @@
 {% extends "base.html" %}
-
-{% block title %}Katsaus - HummAPP{% endblock %}
-
+{% from "_ui.html" import status, bar_chart %}
+{% block title %}Katsaus{% endblock %}
 {% block content %}
-<div class="space-y-6">
-    <!-- Tervetuloa ja pikatilasto -->
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-            <h1 class="text-2xl font-bold text-slate-900">Tallin tilannekatsaus</h1>
-            <p class="text-sm text-slate-500">Hevosten aktiivisuus, videoleikkeet, Anteron juomamäärä ja ilmanlaatu</p>
-        </div>
-        <div class="flex items-center space-x-2">
-            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
-                <span class="w-1.5 h-1.5 mr-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
-                NAS Käynnissä (WAL)
-            </span>
-        </div>
-    </div>
-
-    <!-- Tunnuslukukortit -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <!-- Hevoset -->
-        <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-            <div class="text-xs font-semibold uppercase tracking-wider text-slate-500">Hevoset seurannassa</div>
-            <div class="mt-2 flex items-baseline justify-between">
-                <span class="text-3xl font-black text-slate-900">{{ horse_count }}</span>
-                <a href="/web/horses" class="text-xs text-emerald-600 hover:text-emerald-700 font-medium">Näytä kaikki &rarr;</a>
-            </div>
-            <div class="mt-1 text-xs text-slate-400">Sisältää Anteron ja muut tallihevoset</div>
-        </div>
-
-        <!-- Anteron juominen tänään -->
-        <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-            <div class="text-xs font-semibold uppercase tracking-wider text-blue-600">Antero &bull; Juominen tänään</div>
-            <div class="mt-2 flex items-baseline justify-between">
-                <span class="text-3xl font-black text-blue-900">{{ antero_today_liters }} <span class="text-lg font-normal text-slate-500">L</span></span>
-                <span class="text-xs font-medium text-slate-500">{{ antero_today_count }} krt</span>
-            </div>
-            <div class="mt-1 text-xs text-slate-400">Viimeisin: {{ antero_last_drink or 'Ei mittausta' }}</div>
-        </div>
-
-        <!-- Talli-ilma -->
-        <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-            <div class="text-xs font-semibold uppercase tracking-wider text-slate-500">Talli-ilma (Viimeisin)</div>
-            <div class="mt-2 flex items-baseline justify-between">
-                <span class="text-3xl font-black text-slate-900">
-                    {% if latest_air %}{{ latest_air.temperature }} °C{% else %}--{% endif %}
-                </span>
-                <span class="text-xs font-medium text-slate-500">
-                    {% if latest_air %}{{ latest_air.humidity }} % kosteus{% endif %}
-                </span>
-            </div>
-            <div class="mt-1 text-xs text-slate-400">
-                {% if latest_air %}Ammoniakki: {{ latest_air.ammonia }} ppm &bull; CO2: {{ latest_air.co2 }} ppm{% else %}Ei anturidataa{% endif %}
-            </div>
-        </div>
-
-        <!-- NFC Videointitapahtumat -->
-        <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-            <div class="text-xs font-semibold uppercase tracking-wider text-slate-500">Videoleikkeet</div>
-            <div class="mt-2 flex items-baseline justify-between">
-                <span class="text-3xl font-black text-slate-900">{{ video_count }}</span>
-                <a href="/web/nfc-events" class="text-xs text-emerald-600 hover:text-emerald-700 font-medium">Avaa videot &rarr;</a>
-            </div>
-            <div class="mt-1 text-xs text-slate-400">Automaattinen {{ clip_seconds }} s leikkaus NFC-luvusta</div>
-        </div>
-    </div>
-
-    <!-- Kuvaaja ja tapahtumat rinnakkain -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <!-- Anteron juomisen kehityskuvaaja (2/3) -->
-        <div class="lg:col-span-2 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-            <div class="flex items-center justify-between mb-4">
-                <div>
-                    <h2 class="text-base font-bold text-slate-900">Anteron päivittäinen juomamäärä (litraa)</h2>
-                    <p class="text-xs text-slate-500">Juoma-automaatin mittaukset viimeisiltä päiviltä</p>
-                </div>
-                <a href="/web/water" class="text-xs text-blue-600 hover:text-blue-800 font-medium">Koko historia &rarr;</a>
-            </div>
-            <div class="h-64">
-                <canvas id="dashboardWaterChart"></canvas>
-            </div>
-        </div>
-
-        <!-- Tuoreimmat NFC-tapahtumat (1/3) -->
-        <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-            <h2 class="text-base font-bold text-slate-900 mb-3">Viimeisimmät NFC-tapahtumat</h2>
-            <div class="divide-y divide-slate-100 text-sm">
-                {% for ev in recent_events %}
-                <div class="py-2.5 flex items-center justify-between">
-                    <div>
-                        <div class="font-semibold text-slate-800">
-                            {{ ev.horse.name if ev.horse else 'Tuntematon tagi' }}
-                        </div>
-                        <div class="text-xs text-slate-400">
-                            {{ ev.phone_timestamp|local_time('%d.%m. %H:%M') }} &bull; {{ ev.location or 'Alue 1' }}
-                        </div>
-                    </div>
-                    <div>
-                        {% if ev.status == 'READY' or ev.status == 'APPROVED' %}
-                            <span class="px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800">{{ ev.status }}</span>
-                        {% elif ev.status == 'PROCESSING' or ev.status == 'WAITING_FOR_RECORDING' %}
-                            <span class="px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 animate-pulse">{{ ev.status }}</span>
-                        {% elif ev.status == 'REJECTED' %}
-                            <span class="px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600">REJECTED</span>
-                        {% else %}
-                            <span class="px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">{{ ev.status }}</span>
-                        {% endif %}
-                    </div>
-                </div>
-                {% else %}
-                <div class="py-4 text-center text-xs text-slate-400">Ei vielä NFC-tapahtumia.</div>
-                {% endfor %}
-            </div>
-        </div>
+<div class="page-head">
+    <div>
+        <div class="page-head__date">{{ today_label|capitalize }}</div>
+        <h1>Tänään tallissa</h1>
     </div>
 </div>
-{% endblock %}
 
-{% block scripts %}
-<script>
-document.addEventListener("DOMContentLoaded", function() {
-    fetch('/api/water/daily?days=10')
-        .then(res => res.json())
-        .then(data => {
-            const ctx = document.getElementById('dashboardWaterChart').getContext('2d');
-            const labels = data.map(d => d.date);
-            const totals = data.map(d => d.total_liters);
+<div class="stack">
+    <section aria-labelledby="huomio">
+        <h2 id="huomio" class="visually-hidden">Vaatii huomiota</h2>
+        {% if attention %}
+        <ul class="attention">
+            {% for item in attention %}
+            <li class="{{ 'is-error' if item.tone == 'error' else '' }}">
+                <span>{{ item.text }}</span>
+                <a class="btn" href="{{ item.href }}">{{ item.action }}</a>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <div class="all-clear">Kaikki leikkeet on tarkastettu, eikä mikään vaadi huomiota.</div>
+        {% endif %}
+    </section>
 
-            new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Juotu vesimäärä (litraa)',
-                        data: totals,
-                        backgroundColor: 'rgba(37, 99, 235, 0.75)',
-                        borderColor: 'rgb(29, 78, 216)',
-                        borderWidth: 1,
-                        borderRadius: 4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            title: { display: true, text: 'Litraa / vrk' }
-                        }
-                    }
-                }
-            });
-        })
-        .catch(err => console.error("Could not load water chart data:", err));
-});
-</script>
+    <div class="grid-2">
+        <section class="panel" aria-labelledby="antero">
+            <div class="panel__head">
+                <h2 id="antero">{{ drinking_horse_name }} on juonut tänään</h2>
+                <a class="small" href="/web/water">Juomahistoria</a>
+            </div>
+            <div class="panel__body">
+                <div class="reading">
+                    <span class="reading__value">{{ today_water.liters|num }}</span>
+                    <span class="reading__unit">litraa</span>
+                </div>
+                <p class="reading__context">
+                    {{ today_water.count }} juontikertaa{% if today_water.latest %}, viimeksi klo {{ today_water.latest.measured_at|local_time('%H.%M') }}{% endif %}.
+                    {% if water_chart.average %}Aiempien 13 päivän keskiarvo on {{ water_chart.average|num }} litraa.{% endif %}
+                </p>
+                <div style="margin-top: var(--space-4)">{{ bar_chart(water_chart, drinking_horse_name ~ ' juominen 14 vuorokautta') }}</div>
+            </div>
+        </section>
+
+        <section class="panel" aria-labelledby="ilma">
+            <div class="panel__head">
+                <h2 id="ilma">Talli-ilma nyt</h2>
+                <a class="small" href="/web/air">Kaikki lukemat</a>
+            </div>
+            <div class="panel__body">
+                {% if latest_air %}
+                <ul class="gauges">
+                    {% for m in air_metrics %}
+                    {% set value = latest_air[m.key] %}
+                    {% set off = m.state(value) in ('high', 'low') %}
+                    <li class="{{ 'is-off' if off else '' }}">
+                        <span class="gauges__label">{{ m.label }}</span>
+                        <span class="gauges__value">{{ value|num(m.decimals) }} {{ m.unit }}</span>
+                        <span class="gauges__hint">{{ m.state_text(value) if off else m.guidance }}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+                <p class="small muted" style="margin-top: var(--space-3)">Mitattu klo {{ latest_air.measured_at|local_time('%H.%M') }}</p>
+                {% else %}
+                <div class="empty"><strong>Ei anturilukemia</strong><p>Lukemat näkyvät, kun ilmanlaatuanturi on lähettänyt ensimmäisen mittauksen.</p></div>
+                {% endif %}
+            </div>
+        </section>
+    </div>
+
+    <section class="panel" aria-labelledby="leimaukset">
+        <div class="panel__head">
+            <h2 id="leimaukset">Viimeisimmät leimaukset</h2>
+            <a class="small" href="/web/nfc-events?nayta=kaikki">Kaikki videot</a>
+        </div>
+        <div class="panel__body">
+            {% if recent_events %}
+            <ul class="eventlist">
+                {% for ev in recent_events %}
+                <li>
+                    <div>
+                        <div class="eventlist__who">{{ ev.horse.name if ev.horse else 'Tuntematon tagi' }}</div>
+                        <div class="eventlist__when num">{{ ev.phone_timestamp|local_time('%d.%m. klo %H.%M') }}, {{ ev.location or 'kuvausalue-1' }}</div>
+                    </div>
+                    {{ status(ev.status) }}
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <div class="empty"><strong>Ei vielä leimauksia</strong><p>Kun riimutagi luetaan tallipuhelimella, leimaus ja videoleike näkyvät tässä.</p></div>
+            {% endif %}
+        </div>
+    </section>
+</div>
 {% endblock %}

@@ -35,7 +35,8 @@ def test_web_redirect_ignores_external_next(client, admin_token, db_session):
     client.cookies.set("access_token", f"Bearer {admin_token}")
     r = client.post(f"/web/video-clips/{clip.id}/reject?next=https://evil.example", follow_redirects=False)
     assert r.status_code == 302
-    assert r.headers["location"] == "/web/nfc-events"
+    assert r.headers["location"].startswith("/web/nfc-events")
+    assert "evil" not in r.headers["location"]
 
 
 def test_approve_after_reject_clears_rejected_at(client, auth_headers, db_session):

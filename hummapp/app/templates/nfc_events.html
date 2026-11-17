@@ -1,110 +1,179 @@
 {% extends "base.html" %}
-
-{% block title %}NFC-videointitapahtumat - HummAPP{% endblock %}
-
+{% from "_ui.html" import clip_card with context %}
+{% block title %}Videot{% endblock %}
 {% block content %}
-<div class="space-y-6">
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-            <h1 class="text-2xl font-bold text-slate-900">NFC-videointitapahtumat ja leikkeet</h1>
-            <p class="text-sm text-slate-500">Android-puhelimella luetut NFC-tunnisteet ja leikatut 50 sekunnin videot</p>
-        </div>
-    </div>
-
-    <!-- Tapahtumataulukko -->
-    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div class="overflow-x-auto">
-            <table class="w-full text-left border-collapse text-xs">
-                <thead>
-                    <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider font-semibold">
-                        <th class="py-3 px-4">Tapahtuma #</th>
-                        <th class="py-3 px-4">Hevonen</th>
-                        <th class="py-3 px-4">NFC UID</th>
-                        <th class="py-3 px-4">Lukuajankohta (UTC)</th>
-                        <th class="py-3 px-4">Paikka</th>
-                        <th class="py-3 px-4">Tila</th>
-                        <th class="py-3 px-4">Videoleike & Toiminnot</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-100">
-                    {% for ev in events %}
-                    <tr class="hover:bg-slate-50 transition">
-                        <td class="py-3 px-4 font-mono font-semibold text-slate-700">#{{ ev.id }}</td>
-                        <td class="py-3 px-4">
-                            {% if ev.horse %}
-                                <a href="/web/horses/{{ ev.horse.id }}" class="font-bold text-emerald-800 hover:underline">
-                                    {{ ev.horse.name }}
-                                </a>
-                            {% else %}
-                                <span class="text-red-600 font-semibold italic">Tuntematon tagi</span>
-                            {% endif %}
-                        </td>
-                        <td class="py-3 px-4 font-mono text-slate-600">{{ ev.nfc_uid }}</td>
-                        <td class="py-3 px-4 text-slate-500">{{ ev.phone_timestamp|local_time('%d.%m.%Y %H:%M:%S') }}</td>
-                        <td class="py-3 px-4 text-slate-600">{{ ev.location or 'kuvausalue-1' }}</td>
-                        <td class="py-3 px-4">
-                            {% if ev.status == 'READY' or ev.status == 'APPROVED' %}
-                                <span class="px-2 py-0.5 rounded-full font-bold bg-emerald-100 text-emerald-800">{{ ev.status }}</span>
-                            {% elif ev.status == 'PROCESSING' or ev.status == 'WAITING_FOR_RECORDING' %}
-                                <span class="px-2 py-0.5 rounded-full font-bold bg-amber-100 text-amber-800 animate-pulse">{{ ev.status }}</span>
-                            {% elif ev.status == 'REJECTED' %}
-                                <span class="px-2 py-0.5 rounded-full font-bold bg-slate-100 text-slate-600">REJECTED</span>
-                            {% else %}
-                                <span class="px-2 py-0.5 rounded-full font-bold bg-red-100 text-red-800" title="{{ ev.error_message }}">{{ ev.status }}</span>
-                            {% endif %}
-                        </td>
-                        <td class="py-3 px-4">
-                            {% for clip in ev.video_clips %}
-                                {% if clip.status != 'DELETED' %}
-                                <div class="flex items-center space-x-1.5 flex-wrap gap-1">
-                                    <a href="/api/video-clips/{{ clip.id }}/download" target="_blank"
-                                        class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded transition">
-                                        Katso MP4
-                                    </a>
-                                    {% if clip.is_mock %}<span class="px-2 py-0.5 rounded-full font-bold bg-amber-100 text-amber-800" title="Kameratallennetta ei löytynyt, tämä on testisignaalivideo">TESTIVIDEO</span>{% endif %}
-                                    {% if clip.status != 'APPROVED' %}
-                                    <form action="/web/video-clips/{{ clip.id }}/approve?next=/web/nfc-events" method="POST" class="inline">
-                                        <button type="submit" class="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-medium transition">
-                                            Hyväksy
-                                        </button>
-                                    </form>
-                                    {% endif %}
-                                    {% if clip.status != 'REJECTED' %}
-                                    <form action="/web/video-clips/{{ clip.id }}/reject?next=/web/nfc-events" method="POST" class="inline">
-                                        <button type="submit" class="px-2 py-1 bg-slate-600 hover:bg-slate-700 text-white rounded font-medium transition">
-                                            Hylkää
-                                        </button>
-                                    </form>
-                                    {% endif %}
-                                    {% if current_user.role == 'admin' %}
-                                    <form action="/web/video-clips/{{ clip.id }}/delete?next=/web/nfc-events" method="POST" class="inline"
-                                        onsubmit="return confirm('Haluatko varmasti poistaa tämän videotiedoston levyltä?')">
-                                        <button type="submit" class="px-2 py-1 bg-red-100 hover:bg-red-200 text-red-700 rounded font-medium transition">
-                                            Poista
-                                        </button>
-                                    </form>
-                                    {% endif %}
-                                </div>
-                                {% else %}
-                                <span class="text-slate-400 italic">Poistettu</span>
-                                {% endif %}
-                            {% else %}
-                                {% if ev.error_message %}
-                                    <span class="text-red-500 text-[11px]">{{ ev.error_message }}</span>
-                                {% else %}
-                                    <span class="text-slate-400 italic">Käsitellään...</span>
-                                {% endif %}
-                            {% endfor %}
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="7" class="py-8 text-center text-slate-400">Ei vielä NFC-tapahtumia.</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
+<div class="page-head">
+    <div>
+        <h1>Videoleikkeiden tarkastus</h1>
+        <p>Jokaisesta riimutagin leimauksesta leikataan {{ clip_seconds }} sekunnin video: {{ clip_before }} s ennen ja {{ clip_after }} s jälkeen leimauksen. Katso leike ja merkitse, onnistuiko kuvaus.</p>
     </div>
 </div>
+
+<nav class="filters" aria-label="Näytä leikkeet">
+    {% for key, label in [('odottaa', 'Odottaa'), ('virheet', 'Virheet'), ('kaikki', 'Kaikki')] %}
+    <a href="/web/nfc-events?nayta={{ key }}"{% if nayta == key %} aria-current="true"{% endif %}>
+        {{ label }} <span class="count-badge">{{ counts[key] }}</span>
+    </a>
+    {% endfor %}
+</nav>
+
+<div class="notice" id="new-clips" hidden>
+    <span>Uusia leikkeitä on valmistunut.</span>
+    <a class="btn" href="/web/nfc-events?nayta=odottaa">Näytä</a>
+</div>
+
+{% if rows %}
+<ul class="queue" id="queue">
+    {% for row in rows %}
+    {{ clip_card(row, '/web/nfc-events?nayta=' ~ nayta, preload=loop.index <= 4) }}
+    {% endfor %}
+</ul>
+<p class="queue-hint">Näppäimistöllä: <kbd>1</kbd> hyväksyy ja <kbd>2</kbd> hylkää valitun leikkeen, välilyönti toistaa videon. Jono siirtyy automaattisesti seuraavaan.</p>
+{% else %}
+<div class="panel">
+    {% if nayta == 'odottaa' %}
+    <div class="empty"><strong>Kaikki leikkeet on tarkastettu</strong><p>Uudet leikkeet ilmestyvät tähän noin minuutin kuluttua leimauksesta.</p></div>
+    {% elif nayta == 'virheet' %}
+    <div class="empty"><strong>Ei epäonnistuneita leimauksia</strong><p>Leimaukset ja videoleikkaukset ovat onnistuneet.</p></div>
+    {% else %}
+    <div class="empty"><strong>Ei vielä leimauksia</strong><p>Lue hevosen riimutagi tallipuhelimella. Leike ilmestyy tähän, kun kameratallenne on valmis.</p></div>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    "use strict";
+    var queue = document.getElementById("queue");
+    var toast = document.getElementById("toast");
+    var filter = {{ nayta|tojson }};
+    var toastTimer;
+
+    function showToast(text) {
+        toast.textContent = text;
+        toast.classList.add("is-visible");
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(function () { toast.classList.remove("is-visible"); }, 2200);
+    }
+
+    function setBadges(pending) {
+        document.querySelectorAll(".mainnav .count-badge, .tabbar .count-badge").forEach(function (b) {
+            b.textContent = pending;
+            b.hidden = pending === 0;
+        });
+        var current = document.querySelector('.filters a[href$="nayta=odottaa"] .count-badge');
+        if (current) current.textContent = pending;
+    }
+
+    function cards() { return queue ? Array.prototype.slice.call(queue.querySelectorAll(".clip[data-clip-id]:not([data-clip-id=''])")) : []; }
+    var current = null;
+
+    function select(card, scroll) {
+        if (!card) return;
+        if (current) current.classList.remove("is-current");
+        current = card;
+        card.classList.add("is-current");
+        if (scroll) {
+            var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+            card.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+            card.focus({ preventScroll: true });
+        }
+    }
+
+    function nextPending(after) {
+        var list = cards();
+        var start = list.indexOf(after) + 1;
+        for (var i = start; i < list.length; i++) {
+            if (list[i].dataset.tone === "pending") return list[i];
+        }
+        return null;
+    }
+
+    function review(form) {
+        var card = form.closest(".clip");
+        var buttons = card.querySelectorAll(".clip__actions button");
+        buttons.forEach(function (b) { b.disabled = true; });
+        var video = card.querySelector("video");
+        if (video) video.pause();
+
+        fetch(form.action, { method: "POST", headers: { "Accept": "application/json" }, credentials: "same-origin" })
+            .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+            .then(function (data) {
+                card.dataset.tone = data.tone;
+                card.querySelector('[data-role="status"]').innerHTML =
+                    '<span class="status status--' + data.tone + '">' + data.label + "</span>";
+                card.querySelector('[data-review="approve"] button').hidden = data.status === "APPROVED";
+                card.querySelector('[data-review="reject"] button').hidden = data.status === "REJECTED";
+                card.classList.add("is-done");
+                setBadges(data.pending);
+                showToast(data.status === "APPROVED" ? "Hyväksytty" : "Hylätty");
+                var next = nextPending(card);
+                if (filter === "odottaa") {
+                    setTimeout(function () { card.remove(); }, 260);
+                }
+                if (next) {
+                    select(next, true);
+                } else if (data.pending === 0 && filter === "odottaa") {
+                    setTimeout(function () { window.location.href = "/web/nfc-events?nayta=odottaa&ilmoitus=jono-valmis"; }, 600);
+                }
+            })
+            .catch(function () {
+                // Varmistus: jos pikatallennus epäonnistuu, lähetetään lomake tavallisesti
+                form.submit();
+            })
+            .finally(function () { buttons.forEach(function (b) { b.disabled = false; }); });
+    }
+
+    if (queue) {
+        queue.addEventListener("submit", function (e) {
+            var form = e.target.closest("form[data-review]");
+            if (!form) return;
+            e.preventDefault();
+            review(form);
+        });
+        queue.addEventListener("click", function (e) {
+            var card = e.target.closest(".clip[data-clip-id]");
+            if (card && card.dataset.clipId) select(card, false);
+        });
+        queue.addEventListener("play", function (e) {
+            select(e.target.closest(".clip"), false);
+        }, true);
+        select(cards().filter(function (c) { return c.dataset.tone === "pending"; })[0] || cards()[0], false);
+    }
+
+    document.addEventListener("keydown", function (e) {
+        if (!current || e.ctrlKey || e.metaKey || e.altKey) return;
+        var tag = (e.target.tagName || "").toLowerCase();
+        if (tag === "input" || tag === "textarea" || tag === "select") return;
+        var formSel = e.key === "1" ? '[data-review="approve"]' : e.key === "2" ? '[data-review="reject"]' : null;
+        if (formSel) {
+            var form = current.querySelector(formSel);
+            if (form && !form.querySelector("button").hidden) { e.preventDefault(); review(form); }
+        } else if (e.key === " " && tag !== "button" && tag !== "a" && tag !== "video") {
+            var v = current.querySelector("video");
+            if (v) { e.preventDefault(); v.paused ? v.play() : v.pause(); }
+        }
+    });
+
+    // Käsittelyssä olevat leikkeet: kerrotaan, kun ne valmistuvat (ei yllättävää sivun latausta)
+    var working = {{ working_event_ids|tojson }};
+    if (working.length) {
+        var poll = setInterval(function () {
+            fetch("/web/nfc-events/status?ids=" + working.join(","), { credentials: "same-origin" })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (data.still_working.length < working.length) {
+                        working = data.still_working;
+                        setBadges(data.pending);
+                        document.getElementById("new-clips").hidden = false;
+                    }
+                    if (!working.length) clearInterval(poll);
+                })
+                .catch(function () { clearInterval(poll); });
+        }, 5000);
+    }
+})();
+</script>
 {% endblock %}
