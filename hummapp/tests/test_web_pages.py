@@ -39,3 +39,42 @@ def test_web_login_form_sets_cookie(client):
     r = client.post("/web/login", data={"username": "admin", "password": "testpass123"}, follow_redirects=False)
     assert r.status_code == 302
     assert "access_token" in r.headers.get("set-cookie", "")
+
+
+def test_no_external_runtime_dependencies(web_client):
+    """NAS voi olla ilman internetyhteyttä: sivut eivät saa ladata CDN-tiedostoja."""
+    import re
+    from pathlib import Path
+    templates = Path(__file__).resolve().parent.parent / "app" / "templates"
+    css = (templates.parent / "static" / "css" / "style.css").read_text()
+    for path in list(templates.glob("*.html")) + [None]:
+        text = css if path is None else path.read_text()
+        assert not re.search(r"(src|href)=\"https?://|@import url\('https?://", text), path
+
+
+def test_review_queue_returns_json_for_inline_review(web_client, db_session):
+    from app.models import VideoClip
+    clip = db_session.query(VideoClip).first()
+    r = web_client.post(f"/web/video-clips/{clip.id}/approve", headers={"Accept": "application/json"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "APPROVED" and body["label"] == "Hyväksytty" and body["pending"] == 0
+
+
+def test_status_labels_are_finnish(web_client):
+    text = web_client.get("/web/nfc-events?nayta=kaikki").text
+    assert "Odottaa tarkastusta" in text
+    assert "WAITING_FOR_RECORDING" not in text and ">READY<" not in text
+
+
+def test_horse_form_feedback(web_client):
+    r = web_client.post("/web/horses/create", data={"name": "Antero"}, follow_redirects=False)
+    assert "ilmoitus=hevonen-on-jo" in r.headers["location"]
+    assert "Samanniminen hevonen" in web_client.get(r.headers["location"]).text
+    r = web_client.post("/web/horses/assign-tag", data={"horse_id": 1, "nfc_uid": "ZZ"}, follow_redirects=False)
+    assert "ilmoitus=tagi-virheellinen" in r.headers["location"]
+
+
+def test_dashboard_lists_pending_review(web_client):
+    text = web_client.get("/").text
+    assert "1 videoleike odottaa tarkastusta" in text
