@@ -48,7 +48,7 @@
             </div>
             <div class="mt-1 text-xs text-slate-400">
                 {% if latest_measurement %}
-                    {{ latest_measurement.measured_at.strftime('%d.%m.%Y klo %H:%M') }}
+                    {{ latest_measurement.measured_at|local_time('%d.%m.%Y klo %H:%M') }}
                 {% else %}
                     Ei mittauksia
                 {% endif %}
@@ -91,7 +91,7 @@
                     {% for m in measurements %}
                     <tr class="hover:bg-slate-50 transition">
                         <td class="py-2.5 px-4 font-mono text-slate-600">{{ m.external_measurement_id }}</td>
-                        <td class="py-2.5 px-4 text-slate-700">{{ m.measured_at.strftime('%d.%m.%Y %H:%M:%S') }}</td>
+                        <td class="py-2.5 px-4 text-slate-700">{{ m.measured_at|local_time('%d.%m.%Y %H:%M:%S') }}</td>
                         <td class="py-2.5 px-4 font-bold text-blue-900 text-sm">{{ m.liters }} L</td>
                         <td class="py-2.5 px-4 font-mono text-slate-500">{{ m.external_water_id }}</td>
                         <td class="py-2.5 px-4">

@@ -26,16 +26,19 @@ Tämä kansio sisältää valmiin HummAPP Android -mobiilisovelluksen, joka on *
    - Hevosluettelo yhdistettyine NFC-tageineen, uuden hevosen lisäys ja NFC-tagin yhdistäminen puhelimesta.
    - Hevoskohtaisten muistiinpanojen ja liikeanalyysitulosten selaus ja lisäys.
 
-## Yhteys tähän ympäristöön
+## Yhteys palvelimeen
 
-Sovelluksessa on esiasetettuna tämän pilottiympäristön osoite:
-`https://ais-pre-jjufdm4idfqg3xxnq6pytl-1003724038923.europe-west2.run.app`
+Kirjautumisruudussa valitaan palvelin: AI Studio -pilottiympäristö tai paikallinen **Synology NAS** (`http://192.168.1.100:8000`). Osoitteen voi myös kirjoittaa itse (esim. reverse proxyn HTTPS-osoite tai Tailscale-osoite).
 
-Kirjautumistiedot:
-- Käyttäjätunnus: `admin`
-- Salasana: `Tallipaallikko2026!`
+Tunnuksia ei ole esitäytetty sovellukseen eikä dokumentoitu tähän. Pääkäyttäjän tunnus ja salasana määritetään NASin `.env`-tiedostossa (`ADMIN_USERNAME`, `ADMIN_PASSWORD`).
 
-Voit vaihtaa kirjautumisruudussa yhdellä napautuksella myös paikalliseen **Synology NAS** -osoitteeseen (`http://192.168.1.100:8000`).
+## Videoleikkeen ajoitus
+
+- Leike rajataan **5 s ennen ja 13 s jälkeen** NFC-leimauksen (yhteensä 18 s).
+- Sovellus tallentaa tagin **lukuhetken** heti luvussa ja lähettää sen millisekunnin tarkkuudella. Leike osuu oikeaan kohtaan, vaikka NFC-näkymä avautuisi vasta luvun jälkeen tai verkko olisi hidas.
+- **Puhelimen automaattisen ajan pitää olla päällä.** Palvelin tallentaa jokaiseen tapahtumaan puhelimen ja palvelimen kelloeron ja kirjaa varoituksen, jos ero on yli 2 s.
+- Ulkoiseen soittimeen avattava video käyttää lyhytikäistä, vain kyseiseen leikkeeseen kelpaavaa latauslinkkiä (`POST /api/video-clips/{id}/download-link`). Kirjautumistokenia ei laiteta URL:iin.
+- Pikatestipainikkeet (Antero / Valo / Tuntematon) näkyvät vain debug-versiossa ja toimivat vain, jos NASilla on `SEED_DEMO_DATA=true`.
 
 ## Kääntäminen ja asentaminen Android-puhelimeen
 

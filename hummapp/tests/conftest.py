@@ -6,9 +6,18 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from fastapi.testclient import TestClient
 
+# Testiympäristön asetukset ennen sovelluksen importtia (pakolliset arvot + /tmp-polut)
+os.environ.setdefault("SECRET_KEY", "testi-avain-" + "0" * 40)
+os.environ.setdefault("ADMIN_PASSWORD", "testi-salasana-123")
+os.environ.setdefault("DATABASE_PATH", "/tmp/hummapp_test_app.db")
+os.environ.setdefault("VIDEO_OUTPUT_PATH", "/tmp/hummapp_test_videos")
+os.environ.setdefault("CAMERA_SOURCE_PATH", "/tmp/hummapp_test_camera")
+os.environ.setdefault("LOG_FILE", "/tmp/hummapp_test.log")
+os.environ.setdefault("WATER_FETCH_INTERVAL_MINUTES", "0")
+os.environ.setdefault("AIR_FETCH_INTERVAL_MINUTES", "0")
+
 # Lisätään hummapp-kansio sys.pathiin moduulihakuja varten
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from app.config import settings
 from app.database import Base, get_db
 from app.main import app
 from app.models import User, Horse, NfcTag

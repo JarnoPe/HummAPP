@@ -1,6 +1,7 @@
 package fi.hummapp.android.ui.screens
 
 import android.content.Intent
+import fi.hummapp.android.BuildConfig
 import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -54,13 +55,13 @@ fun NfcAndVideoScreen(
         }
     }
 
-    fun triggerNfcScan(uid: String) {
+    fun triggerNfcScan(uid: String, readAtMillis: Long = System.currentTimeMillis()) {
         isSending = true
         errorMessage = null
         activeEvent = null
 
         scope.launch {
-            val res = repository.sendNfcEvent(uid, locationInput.ifBlank { "kuvausalue-1" })
+            val res = repository.sendNfcEvent(uid, locationInput.ifBlank { "kuvausalue-1" }, readAtMillis)
             isSending = false
             res.onSuccess { event ->
                 activeEvent = event
@@ -84,7 +85,8 @@ fun NfcAndVideoScreen(
         if (!lastScannedUid.isNullOrBlank()) {
             val uid = lastScannedUid
             onClearScannedUid()
-            triggerNfcScan(uid)
+            // Käytetään tagin todellista lukuhetkeä: näkymä voi avautua vasta luvun jälkeen
+            triggerNfcScan(uid, nfcManager.lastReadAtMillis.takeIf { it > 0 } ?: System.currentTimeMillis())
         }
     }
 
@@ -159,7 +161,7 @@ fun NfcAndVideoScreen(
                                     text = when {
                                         !nfcSupported -> "Laitteessa ei ole NFC-sirua (voit testata alta)."
                                         !nfcEnabled -> "NFC on pois päältä laitteen asetuksista."
-                                        else -> "Vie puhelin riimutagiin leikataksesi 50s videon."
+                                        else -> "Vie puhelin riimutagiin leikataksesi 18 s videon (5 s ennen ja 13 s jälkeen)."
                                     },
                                     fontSize = 12.sp,
                                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
@@ -184,40 +186,43 @@ fun NfcAndVideoScreen(
                             modifier = Modifier.fillMaxWidth()
                         )
 
-                        // Pikatestausnapit ilman fyysistä tagia
-                        Text(
-                            text = "Pikatesti (lähettää NFC-tapahtuman palvelimelle):",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                        )
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            FilledTonalButton(
-                                onClick = { triggerNfcScan("04A31B92C56F80") },
-                                enabled = !isSending,
-                                modifier = Modifier.weight(1f),
-                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp)
+                        // Pikatestausnapit ilman fyysistä tagia – vain debug-versiossa
+                        // (esimerkkitagit ovat olemassa vain, jos NASilla SEED_DEMO_DATA=true)
+                        if (BuildConfig.DEBUG) {
+                            Text(
+                                text = "Pikatesti (lähettää NFC-tapahtuman palvelimelle):",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                Text("Antero", fontSize = 11.sp)
-                            }
-                            FilledTonalButton(
-                                onClick = { triggerNfcScan("04E24589F10123") },
-                                enabled = !isSending,
-                                modifier = Modifier.weight(1f),
-                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp)
-                            ) {
-                                Text("Valo", fontSize = 11.sp)
-                            }
-                            OutlinedButton(
-                                onClick = { triggerNfcScan("DEADBEEF9999") },
-                                enabled = !isSending,
-                                modifier = Modifier.weight(1f),
-                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp)
-                            ) {
-                                Text("Tuntematon", fontSize = 11.sp)
+                                FilledTonalButton(
+                                    onClick = { triggerNfcScan("04A31B92C56F80") },
+                                    enabled = !isSending,
+                                    modifier = Modifier.weight(1f),
+                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp)
+                                ) {
+                                    Text("Antero", fontSize = 11.sp)
+                                }
+                                FilledTonalButton(
+                                    onClick = { triggerNfcScan("04E24589F10123") },
+                                    enabled = !isSending,
+                                    modifier = Modifier.weight(1f),
+                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp)
+                                ) {
+                                    Text("Valo", fontSize = 11.sp)
+                                }
+                                OutlinedButton(
+                                    onClick = { triggerNfcScan("DEADBEEF9999") },
+                                    enabled = !isSending,
+                                    modifier = Modifier.weight(1f),
+                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp)
+                                ) {
+                                    Text("Tuntematon", fontSize = 11.sp)
+                                }
                             }
                         }
                     }
@@ -281,7 +286,7 @@ fun NfcAndVideoScreen(
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Text("FFmpeg leikkaa videota (10s ennen + 40s jälkeen)...", fontSize = 12.sp)
+                                    Text("FFmpeg leikkaa videota (5 s ennen + 13 s jälkeen)...", fontSize = 12.sp)
                                 }
                             }
                             val clipId = ev.videoClipId

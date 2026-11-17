@@ -109,7 +109,13 @@ data class VideoClip(
     val status: String,
     @SerializedName("created_at") val createdAt: String,
     @SerializedName("approved_at") val approvedAt: String?,
-    @SerializedName("rejected_at") val rejectedAt: String?
+    @SerializedName("rejected_at") val rejectedAt: String?,
+    @SerializedName("is_mock") val isMock: Boolean = false
+)
+
+data class VideoDownloadLink(
+    val url: String,
+    @SerializedName("expires_in_seconds") val expiresInSeconds: Int
 )
 
 data class HorseNote(

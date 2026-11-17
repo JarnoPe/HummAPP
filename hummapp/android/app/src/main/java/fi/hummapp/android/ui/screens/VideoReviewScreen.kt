@@ -46,7 +46,6 @@ fun VideoReviewScreen(
     var message by remember { mutableStateOf<String?>(null) }
 
     val videoUrl = "${tokenManager.getBaseUrl()}/api/video-clips/$clipId/download"
-    val token = tokenManager.getToken() ?: ""
 
     // Haetaan leikkeen metatiedot
     LaunchedEffect(clipId) {
@@ -131,6 +130,14 @@ fun VideoReviewScreen(
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                         )
+                        if (clipInfo!!.isMock) {
+                            Text(
+                                text = "TESTIVIDEO – kameratallennetta ei löytynyt",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
                     }
                 }
             }
@@ -195,9 +202,15 @@ fun VideoReviewScreen(
 
             TextButton(
                 onClick = {
-                    val downloadUri = Uri.parse("$videoUrl?token=$token")
-                    val intent = Intent(Intent.ACTION_VIEW, downloadUri)
-                    context.startActivity(intent)
+                    // Istuntotokenia ei laiteta URL:iin (päätyisi lokeihin/historiaan):
+                    // palvelin antaa lyhytikäisen, vain tähän leikkeeseen kelpaavan linkin.
+                    scope.launch {
+                        repository.createVideoDownloadLink(clipId)
+                            .onSuccess { url ->
+                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                            }
+                            .onFailure { err -> message = err.localizedMessage ?: "Latauslinkin luonti epäonnistui" }
+                    }
                 }
             ) {
                 Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))

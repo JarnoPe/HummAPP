@@ -24,16 +24,10 @@ declare global {
   }
 }
 
-interface NfcTag {
-  id: number;
-  nfc_uid: string;
-}
-
 interface HorseNote {
   id: number;
   horse_id: number;
   content: string;
-  author_username: string | null;
   created_at: string;
 }
 
@@ -51,11 +45,10 @@ interface PublicHorse {
   name: string;
   breed: string | null;
   birth_year: number | null;
-  owner_name: string | null;
   stall_box: string | null;
   description: string | null;
   created_at: string;
-  nfc_tags: NfcTag[];
+  has_nfc_tag: boolean;
   notes: HorseNote[];
   analyses: MovementAnalysis[];
 }
@@ -68,18 +61,13 @@ interface WaterDailySummary {
 
 interface WaterMeasurement {
   id: number;
-  horse_id: number | null;
-  horse_name: string | null;
-  external_measurement_id: string;
-  external_water_id: string;
   measured_at: string;
   liters: number;
-  raw_data_json: string | null;
 }
 
 interface StableAirMeasurement {
   id: number;
-  sensor_id: string;
+  sensor_id?: string;
   location: string | null;
   measured_at: string;
   temperature: number | null;
@@ -93,7 +81,6 @@ interface NfcEventItem {
   id: number;
   horse_id: number | null;
   horse_name: string | null;
-  nfc_uid: string;
   phone_timestamp: string;
   location: string | null;
   status: string;
@@ -104,8 +91,10 @@ interface NfcEventItem {
 interface PublicOverview {
   read_only: boolean;
   generated_at: string;
-  water_external_id: string;
   drinking_horse_name: string;
+  clip_seconds_before?: number;
+  clip_seconds_after?: number;
+  public_video_enabled?: boolean;
   horses: PublicHorse[];
   water_daily: WaterDailySummary[];
   water_measurements: WaterMeasurement[];
@@ -115,9 +104,30 @@ interface PublicOverview {
 
 type PublicTab = 'overview' | 'horses' | 'water' | 'environment' | 'deploy';
 
-function formatUtcTimestamp(iso: string | null | undefined): string {
+const LOCAL_TIMEZONE = 'Europe/Helsinki';
+const localTimestampFormat = new Intl.DateTimeFormat('fi-FI', {
+  timeZone: LOCAL_TIMEZONE,
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
+// Palvelin palauttaa UTC-ajat; aikavyöhyketön ISO-merkkijono tulkitaan UTC:ksi.
+function parseUtc(iso: string): Date {
+  return new Date(/[zZ]|[+-]\d{2}:\d{2}$/.test(iso) ? iso : `${iso}Z`);
+}
+
+function formatLocalTimestamp(iso: string | null | undefined): string {
   if (!iso) return '--';
-  return iso.slice(0, 16).replace('T', ' ') + ' UTC';
+  const date = parseUtc(iso);
+  return Number.isNaN(date.getTime()) ? '--' : localTimestampFormat.format(date);
+}
+
+// Vuorokausisummat lasketaan palvelimella Suomen ajan mukaan -> "tänään" samoin
+function localDateKey(date = new Date()): string {
+  return new Intl.DateTimeFormat('sv-SE', { timeZone: LOCAL_TIMEZONE }).format(date);
 }
 
 function statusLabelFi(status: string): { label: string; colorClass: string } {
@@ -206,7 +216,6 @@ export default function App() {
       (h) =>
         h.name.toLowerCase().includes(q) ||
         (h.breed && h.breed.toLowerCase().includes(q)) ||
-        (h.owner_name && h.owner_name.toLowerCase().includes(q)) ||
         (h.stall_box && h.stall_box.toLowerCase().includes(q))
     );
   }, [horses, horseSearch]);
@@ -221,7 +230,9 @@ export default function App() {
   const nfcEvents = data?.nfc_events ?? [];
 
   const latestAir = airReadings[0] ?? null;
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = localDateKey();
+  const clipBefore = data?.clip_seconds_before ?? 5;
+  const clipAfter = data?.clip_seconds_after ?? 13;
   const todayWater = waterDaily.find((d) => d.date === todayStr) ?? waterDaily[waterDaily.length - 1];
   const todayLiters = todayWater ? todayWater.total_liters : 0;
   const todayDrinkCount = todayWater ? todayWater.measurement_count : 0;
@@ -411,7 +422,7 @@ export default function App() {
             </span>
           </div>
           <div className="flex items-center gap-4">
-            <span className="font-mono tabular-nums">Päivitetty: {formatUtcTimestamp(data?.generated_at)}</span>
+            <span className="font-mono tabular-nums">Päivitetty: {formatLocalTimestamp(data?.generated_at)}</span>
             <button
               onClick={loadPublicData}
               className="inline-flex items-center gap-1.5 text-[#1B325E] hover:text-[#C60651] font-semibold transition-colors whitespace-nowrap shrink-0"
@@ -512,7 +523,7 @@ export default function App() {
                 </div>
                 <div className="text-3xl font-bold text-[#1B325E] font-mono tabular-nums">{nfcEvents.length}</div>
                 <p className="text-xs text-[#6D6E71]">
-                  50 s leikkeet kameralta
+                  {clipBefore + clipAfter} s leikkeet kameralta ({clipBefore} s ennen + {clipAfter} s jälkeen leimauksen)
                 </p>
               </div>
             </section>
@@ -524,7 +535,7 @@ export default function App() {
                   <div>
                     <h2 className="text-lg font-bold text-[#1B325E]">Anteron päivittäinen juomamäärä</h2>
                     <p className="text-xs text-[#6D6E71]">
-                      Laite: <span className="font-mono">{data?.water_external_id || 'WATER-METER-ANTERO-01'}</span> · Keskiarvo {avgWater.toFixed(1)} L/vrk
+                      Juoma-automaatti: {data?.drinking_horse_name || 'Antero'} · Keskiarvo {avgWater.toFixed(1)} L/vrk
                     </p>
                   </div>
                   <button
@@ -735,17 +746,15 @@ export default function App() {
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                         <div>
-                          <div className="text-[#6D6E71]">Omistaja / Talli</div>
+                          <div className="text-[#6D6E71]">Karsina</div>
                           <div className="font-semibold text-[#1B325E] mt-0.5">
-                            {activeHorse.owner_name || 'Ei määritetty'}
+                            {activeHorse.stall_box || 'Ei määritetty'}
                           </div>
                         </div>
                         <div>
                           <div className="text-[#6D6E71]">NFC-riimutunniste</div>
-                          <div className="font-mono text-[#1B325E] mt-0.5">
-                            {activeHorse.nfc_tags.length > 0
-                              ? activeHorse.nfc_tags.map((t) => t.nfc_uid).join(', ')
-                              : 'Ei liitettyä tagia'}
+                          <div className="font-semibold text-[#1B325E] mt-0.5">
+                            {activeHorse.has_nfc_tag ? 'Tagi liitetty' : 'Ei liitettyä tagia'}
                           </div>
                         </div>
                       </div>
@@ -770,7 +779,7 @@ export default function App() {
                               <div key={n.id} className="py-3 first:pt-0 last:pb-0 space-y-1">
                                 <p className="text-sm text-[#58595B] leading-relaxed">{n.content}</p>
                                 <div className="text-[11px] text-[#6D6E71]">
-                                  {n.author_username || 'Tallitiimi'} · {formatUtcTimestamp(n.created_at)}
+                                  Tallitiimi · {formatLocalTimestamp(n.created_at)}
                                 </div>
                               </div>
                             ))}
@@ -798,7 +807,7 @@ export default function App() {
                                 </div>
                                 <p className="text-xs text-[#58595B] leading-relaxed">{a.summary}</p>
                                 <div className="text-[11px] text-[#6D6E71]">
-                                  {formatUtcTimestamp(a.analysis_timestamp)}
+                                  {formatLocalTimestamp(a.analysis_timestamp)}
                                 </div>
                               </div>
                             ))}
@@ -827,7 +836,7 @@ export default function App() {
                 <div>
                   <h1 className="text-2xl font-bold text-[#1B325E]">Juoma-automaatin seuranta: Antero</h1>
                   <p className="text-xs text-[#6D6E71] mt-1">
-                    Laitetunnus <span className="font-mono">{data?.water_external_id || 'WATER-METER-ANTERO-01'}</span> · Pilotissa juoma-automaatti on vain Anterolla.
+                    Pilotissa juoma-automaatti on vain hevosella {data?.drinking_horse_name || 'Antero'}.
                   </p>
                 </div>
                 <div className="text-right font-mono tabular-nums">
@@ -860,37 +869,21 @@ export default function App() {
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
                     <tr className="border-b border-slate-200 text-[#6D6E71] font-semibold">
-                      <th className="py-2.5 px-3">Mittaus-ID</th>
                       <th className="py-2.5 px-3">Aikaleima</th>
                       <th className="py-2.5 px-3 text-right">Määrä</th>
-                      <th className="py-2.5 px-3">Virtaus / Kesto / Lämpötila</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {waterList.map((m) => {
-                      let tel: { flow_rate_lpm?: number; duration_sec?: number; temp_celsius?: number } | null = null;
-                      try {
-                        tel = m.raw_data_json ? JSON.parse(m.raw_data_json) : null;
-                      } catch {
-                        tel = null;
-                      }
-                      return (
-                        <tr key={m.id} className="hover:bg-slate-50">
-                          <td className="py-2.5 px-3 font-mono text-[#58595B]">{m.external_measurement_id}</td>
-                          <td className="py-2.5 px-3 font-mono text-[#6D6E71] tabular-nums">
-                            {formatUtcTimestamp(m.measured_at)}
-                          </td>
-                          <td className="py-2.5 px-3 text-right font-mono font-bold text-[#1B325E] tabular-nums">
-                            {m.liters.toFixed(1)} L
-                          </td>
-                          <td className="py-2.5 px-3 font-mono text-[#6D6E71] tabular-nums">
-                            {tel
-                              ? `${tel.flow_rate_lpm ?? '--'} L/min · ${tel.duration_sec ?? '--'} s · ${tel.temp_celsius ?? '--'} °C`
-                              : '--'}
-                          </td>
-                        </tr>
-                      );
-                    })}
+                    {waterList.map((m) => (
+                      <tr key={m.id} className="hover:bg-slate-50">
+                        <td className="py-2.5 px-3 font-mono text-[#6D6E71] tabular-nums">
+                          {formatLocalTimestamp(m.measured_at)}
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-mono font-bold text-[#1B325E] tabular-nums">
+                          {m.liters.toFixed(1)} L
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
@@ -927,9 +920,9 @@ export default function App() {
                   <tbody className="divide-y divide-slate-100">
                     {airReadings.slice(0, 12).map((a) => (
                       <tr key={a.id} className="hover:bg-slate-50">
-                        <td className="py-2.5 px-3 font-semibold text-[#1B325E]">{a.location || a.sensor_id}</td>
+                        <td className="py-2.5 px-3 font-semibold text-[#1B325E]">{a.location || a.sensor_id || 'Anturi'}</td>
                         <td className="py-2.5 px-3 font-mono text-[#6D6E71] tabular-nums">
-                          {formatUtcTimestamp(a.measured_at)}
+                          {formatLocalTimestamp(a.measured_at)}
                         </td>
                         <td className="py-2.5 px-3 text-right font-mono tabular-nums">{a.temperature ?? '--'} °C</td>
                         <td className="py-2.5 px-3 text-right font-mono tabular-nums">{a.humidity ?? '--'} %</td>
@@ -969,6 +962,7 @@ export default function App() {
                       const canPlay =
                         ev.video_clip_id &&
                         dataSourceMode === 'live' &&
+                        data?.public_video_enabled === true &&
                         (ev.video_clip_status === 'READY' || ev.video_clip_status === 'APPROVED');
                       return (
                         <tr key={ev.id} className="hover:bg-slate-50">
@@ -976,7 +970,7 @@ export default function App() {
                           <td className="py-2.5 px-3 font-semibold text-[#1B325E]">{ev.horse_name || 'Tuntematon'}</td>
                           <td className="py-2.5 px-3 text-[#6D6E71]">{ev.location || 'kuvausalue-1'}</td>
                           <td className="py-2.5 px-3 font-mono text-[#6D6E71] tabular-nums">
-                            {formatUtcTimestamp(ev.phone_timestamp)}
+                            {formatLocalTimestamp(ev.phone_timestamp)}
                           </td>
                           <td className={`py-2.5 px-3 font-semibold ${st.colorClass}`}>{st.label}</td>
                           <td className="py-2.5 px-3 text-right">

@@ -134,11 +134,19 @@ class HummRepository(
         }
     }
 
-    suspend fun sendNfcEvent(nfcUid: String, location: String = "kuvausalue-1"): Result<NfcEventResponse> {
+    /**
+     * Lähettää NFC-leimauksen. [readAtMillis] on tagin lukuhetki; leike rajataan sen ympäriltä,
+     * joten aikaleima lähetetään millisekunnin tarkkuudella (aiemmin sekunnit katkaistiin).
+     */
+    suspend fun sendNfcEvent(
+        nfcUid: String,
+        location: String = "kuvausalue-1",
+        readAtMillis: Long = System.currentTimeMillis()
+    ): Result<NfcEventResponse> {
         return try {
-            val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
+            val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
             sdf.timeZone = TimeZone.getTimeZone("UTC")
-            val timestamp = sdf.format(Date())
+            val timestamp = sdf.format(Date(readAtMillis))
 
             val req = NfcEventRequest(
                 nfcUid = nfcUid,
@@ -162,6 +170,18 @@ class HummRepository(
             val resp = api.getNfcEvent(id)
             if (resp.isSuccessful && resp.body() != null) Result.success(resp.body()!!)
             else Result.failure(Exception("Tapahtumaa ei löytynyt"))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /** Lyhytikäinen latauslinkki ulkoiselle soittimelle (ei paljasta istuntotokenia URL:ssa). */
+    suspend fun createVideoDownloadLink(clipId: Int): Result<String> {
+        return try {
+            val resp = api.createVideoDownloadLink(clipId)
+            val body = resp.body()
+            if (resp.isSuccessful && body != null) Result.success(tokenManager.getBaseUrl() + body.url)
+            else Result.failure(Exception("Latauslinkin luonti epäonnistui: ${resp.code()}"))
         } catch (e: Exception) {
             Result.failure(e)
         }

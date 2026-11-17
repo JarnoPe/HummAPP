@@ -63,7 +63,7 @@
                 <span class="text-3xl font-black text-slate-900">{{ video_count }}</span>
                 <a href="/web/nfc-events" class="text-xs text-emerald-600 hover:text-emerald-700 font-medium">Avaa videot &rarr;</a>
             </div>
-            <div class="mt-1 text-xs text-slate-400">Automaattinen 50s leikkaus NFC-luvusta</div>
+            <div class="mt-1 text-xs text-slate-400">Automaattinen {{ clip_seconds }} s leikkaus NFC-luvusta</div>
         </div>
     </div>
 
@@ -94,7 +94,7 @@
                             {{ ev.horse.name if ev.horse else 'Tuntematon tagi' }}
                         </div>
                         <div class="text-xs text-slate-400">
-                            {{ ev.phone_timestamp.strftime('%d.%m. %H:%M') }} &bull; {{ ev.location or 'Alue 1' }}
+                            {{ ev.phone_timestamp|local_time('%d.%m. %H:%M') }} &bull; {{ ev.location or 'Alue 1' }}
                         </div>
                     </div>
                     <div>

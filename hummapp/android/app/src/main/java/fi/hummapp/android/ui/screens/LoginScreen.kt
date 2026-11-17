@@ -30,8 +30,9 @@ fun LoginScreen(
     onLoginSuccess: () -> Unit
 ) {
     var serverUrl by remember { mutableStateOf(tokenManager.getBaseUrl()) }
-    var username by remember { mutableStateOf("admin") }
-    var password by remember { mutableStateOf("Tallipaallikko2026!") }
+    // Tunnuksia ei esitäytetä eikä näytetä: ne annetaan NASin .env-tiedostossa (ADMIN_USERNAME/ADMIN_PASSWORD)
+    var username by remember { mutableStateOf(tokenManager.getUsername() ?: "") }
+    var password by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
     var isTestingHealth by remember { mutableStateOf(false) }
     var healthStatusMsg by remember { mutableStateOf<String?>(null) }
@@ -234,12 +235,5 @@ fun LoginScreen(
                 Text("Kirjaudu sisään", fontWeight = FontWeight.Bold)
             }
         }
-
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = "Oletustunnus pilottiin: admin / Tallipaallikko2026!",
-            fontSize = 11.sp,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
-        )
     }
 }

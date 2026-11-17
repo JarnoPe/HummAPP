@@ -64,8 +64,9 @@ fun WaterDetailScreen(
     }
 
     val todayStr = remember {
+        // Palvelin laskee vuorokausisummat Suomen ajan mukaan (APP_TIMEZONE)
         SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
-            timeZone = TimeZone.getTimeZone("UTC")
+            timeZone = TimeZone.getTimeZone("Europe/Helsinki")
         }.format(Date())
     }
     val todaySummary = dailySummaries.find { it.date == todayStr }

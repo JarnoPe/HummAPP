@@ -8,16 +8,16 @@ from sqlalchemy import (
     Float,
     Text,
     ForeignKey,
-    UniqueConstraint,
     Index,
 )
 from sqlalchemy.orm import relationship
+from app.constants import ClipStatus, EventStatus
 from app.database import Base
 
 
-def utc_now():
-    """Palauttaa nykyisen ajan UTC-muodossa ilman aikavyöhykettä SQLite-yhteensopivasti."""
-    return datetime.datetime.now(datetime.timezone.utc)
+def utc_now() -> datetime.datetime:
+    """Nykyhetki naiivina UTC-aikana (SQLite ei tallenna aikavyöhykettä)."""
+    return datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
 
 
 class User(Base):
@@ -77,9 +77,10 @@ class NfcEvent(Base):
     server_timestamp = Column(DateTime, default=utc_now, nullable=False)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     location = Column(String(128), nullable=True)
-    status = Column(String(32), default="RECEIVED", nullable=False, index=True)
-    # Tilat: RECEIVED, WAITING_FOR_RECORDING, PROCESSING, READY, FAILED, APPROVED, REJECTED
+    status = Column(String(32), default=EventStatus.RECEIVED.value, nullable=False, index=True)  # ks. EventStatus
     error_message = Column(Text, nullable=True)
+    # Puhelimen ja palvelimen kellojen ero sekunteina (positiivinen = puhelin edellä)
+    clock_skew_seconds = Column(Float, nullable=True)
 
     horse = relationship("Horse", back_populates="nfc_events")
     user = relationship("User", back_populates="nfc_events")
@@ -92,8 +93,9 @@ class VideoClip(Base):
     id = Column(Integer, primary_key=True, index=True)
     nfc_event_id = Column(Integer, ForeignKey("nfc_events.id", ondelete="CASCADE"), nullable=False, index=True)
     relative_file_path = Column(String(512), nullable=False)
-    status = Column(String(32), default="READY", nullable=False, index=True)
-    # Tilat: PROCESSING, READY, FAILED, APPROVED, REJECTED, DELETED
+    status = Column(String(32), default=ClipStatus.READY.value, nullable=False, index=True)  # ks. ClipStatus
+    # true = testisignaalivideo (ENABLE_MOCK_CAMERA_FALLBACK), ei oikea kameratallenne
+    is_mock = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=utc_now, nullable=False)
     approved_at = Column(DateTime, nullable=True)
     rejected_at = Column(DateTime, nullable=True)
@@ -151,6 +153,8 @@ class StableAirMeasurement(Base):
     particulate_matter = Column(Float, nullable=True)  # µg/m³ (PM2.5 / PM10)
     raw_data_json = Column(Text, nullable=True)
     created_at = Column(DateTime, default=utc_now, nullable=False)
+
+    __table_args__ = (Index("ix_air_sensor_measured", "sensor_id", "measured_at"),)
 
 
 class HorseNote(Base):

@@ -108,7 +108,7 @@
                 <tbody class="divide-y divide-slate-100">
                     {% for r in readings %}
                     <tr class="hover:bg-slate-50 transition">
-                        <td class="py-2.5 px-4 text-slate-700">{{ r.measured_at.strftime('%d.%m.%Y %H:%M:%S') }}</td>
+                        <td class="py-2.5 px-4 text-slate-700">{{ r.measured_at|local_time('%d.%m.%Y %H:%M:%S') }}</td>
                         <td class="py-2.5 px-4 font-medium text-slate-900">
                             {{ r.location or r.sensor_id }}
                             <div class="text-[10px] text-slate-400 font-mono">{{ r.sensor_id }}</div>
