@@ -1,0 +1,75 @@
+# Julkaisee julkisen verkkosivuston (hummapp.fi) GitHub Pagesiin.
+# Ajetaan aina, kun sivuston lähdekoodi muuttuu main-haarassa, tai käsin
+# (Actions -> "Verkkosivut (hummapp.fi)" -> Run workflow).
+#
+# Käyttöönotto: Settings -> Pages -> Source: "GitHub Actions" ja Custom domain: hummapp.fi
+name: Verkkosivut (hummapp.fi)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "public/**"
+      - "index.html"
+      - "vite.config.ts"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Vain yksi julkaisu kerrallaan; keskeneräistä julkaisua ei keskeytetä
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Asenna riippuvuudet
+        run: npm ci
+
+      - name: Tarkista tyypit
+        run: npx tsc --noEmit
+
+      - name: Käännä sivusto
+        run: npx vite build
+
+      - name: Viimeistele julkaisupaketti
+        run: |
+          # Sivusto on yksisivuinen sovellus: tuntemattomat osoitteet ohjataan etusivulle
+          cp dist/index.html dist/404.html
+          # Verkkotunnus ja Jekyll pois päältä (staattiset tiedostot sellaisenaan)
+          echo "hummapp.fi" > dist/CNAME
+          touch dist/.nojekyll
+          du -sh dist
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Julkaise GitHub Pagesiin
+        id: deployment
+        uses: actions/deploy-pages@v4
