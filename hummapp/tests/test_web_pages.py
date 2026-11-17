@@ -78,3 +78,17 @@ def test_horse_form_feedback(web_client):
 def test_dashboard_lists_pending_review(web_client):
     text = web_client.get("/").text
     assert "1 videoleike odottaa tarkastusta" in text
+
+
+def test_status_poll_reports_failures_separately(web_client, db_session):
+    """Epäonnistunut leikkaus ei saa näyttää valmistuneelta leikkeeltä tarkastusjonossa."""
+    from app.models import NfcEvent, utc_now
+    ready = NfcEvent(horse_id=1, nfc_uid="04A31B92C56F80", phone_timestamp=utc_now(), status="READY")
+    failed = NfcEvent(horse_id=1, nfc_uid="04A31B92C56F80", phone_timestamp=utc_now(), status="FAILED")
+    working = NfcEvent(horse_id=1, nfc_uid="04A31B92C56F80", phone_timestamp=utc_now(), status="PROCESSING")
+    db_session.add_all([ready, failed, working])
+    db_session.commit()
+    body = web_client.get(f"/web/nfc-events/status?ids={ready.id},{failed.id},{working.id}").json()
+    assert body["still_working"] == [working.id]
+    assert {"id": failed.id, "status": "FAILED"} in body["finished"]
+    assert {"id": ready.id, "status": "READY"} in body["finished"]

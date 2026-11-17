@@ -18,8 +18,12 @@
 </nav>
 
 <div class="notice" id="new-clips" hidden>
-    <span>Uusia leikkeitä on valmistunut.</span>
+    <span>Uusia leikkeitä on valmistunut tarkastettavaksi.</span>
     <a class="btn" href="/web/nfc-events?nayta=odottaa">Näytä</a>
+</div>
+<div class="notice notice--error" id="failed-clips" role="alert" hidden>
+    <span data-role="text">Videoleikkaus epäonnistui.</span>
+    <a class="btn" href="/web/nfc-events?nayta=virheet">Näytä virheet</a>
 </div>
 
 {% if rows %}
@@ -159,15 +163,38 @@
 
     // Käsittelyssä olevat leikkeet: kerrotaan, kun ne valmistuvat (ei yllättävää sivun latausta)
     var working = {{ working_event_ids|tojson }};
+    var failedCount = 0;
+    var initialFailed = {{ counts['virheet']|tojson }};
     if (working.length) {
         var poll = setInterval(function () {
             fetch("/web/nfc-events/status?ids=" + working.join(","), { credentials: "same-origin" })
                 .then(function (r) { return r.json(); })
                 .then(function (data) {
-                    if (data.still_working.length < working.length) {
-                        working = data.still_working;
-                        setBadges(data.pending);
-                        document.getElementById("new-clips").hidden = false;
+                    working = data.still_working;
+                    setBadges(data.pending);
+                    data.finished.forEach(function (ev) {
+                        var card = document.getElementById("tapahtuma-" + ev.id);
+                        if (card) {
+                            var tone = ev.status === "FAILED" ? "error" : "pending";
+                            card.dataset.tone = tone;
+                            card.querySelector('[data-role="status"]').innerHTML =
+                                '<span class="status status--' + tone + '">' +
+                                (ev.status === "FAILED" ? "Epäonnistui" : "Valmis, lataa sivu tarkastaaksesi") + "</span>";
+                        }
+                        if (ev.status === "FAILED") {
+                            failedCount += 1;
+                        } else if (ev.status === "READY") {
+                            document.getElementById("new-clips").hidden = false;
+                        }
+                    });
+                    if (failedCount) {
+                        var box = document.getElementById("failed-clips");
+                        box.querySelector('[data-role="text"]').textContent = failedCount === 1
+                            ? "Yhden leimauksen videoleikkaus epäonnistui."
+                            : failedCount + " leimauksen videoleikkaus epäonnistui.";
+                        box.hidden = false;
+                        var badge = document.querySelector('.filters a[href$="nayta=virheet"] .count-badge');
+                        if (badge) badge.textContent = initialFailed + failedCount;
                     }
                     if (!working.length) clearInterval(poll);
                 })
