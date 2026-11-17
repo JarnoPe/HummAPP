@@ -353,12 +353,17 @@ def delete_clip_web(clip_id: int, next: Optional[str] = None, db: Session = Depe
 
 @router.get("/web/nfc-events/status")
 def nfc_events_status(ids: str = "", db: Session = Depends(get_db), user: User = Depends(require_web_user)):
-    """Kevyt tilakysely tarkastusjonolle: kertoo, ovatko käsittelyssä olleet leikkeet valmistuneet."""
+    """
+    Kevyt tilakysely tarkastusjonolle. Palauttaa käsittelyssä olleiden tapahtumien
+    lopputilan, jotta valmistunut leike (READY) ja epäonnistunut leikkaus (FAILED)
+    voidaan ilmoittaa eri tavoin.
+    """
     wanted = [int(i) for i in ids.split(",") if i.isdigit()][:50]
     events = db.query(NfcEvent).filter(NfcEvent.id.in_(wanted)).all() if wanted else []
     return {
         "pending": pending_review_count(db),
         "still_working": [e.id for e in events if e.status in ui.WORKING_STATUSES],
+        "finished": [{"id": e.id, "status": e.status} for e in events if e.status not in ui.WORKING_STATUSES],
     }
 
 
