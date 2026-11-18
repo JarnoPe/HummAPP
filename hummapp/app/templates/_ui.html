@@ -86,7 +86,7 @@
             {% if clip and ev.error_message %}<p class="clip__error">{{ ev.error_message }}</p>{% endif %}
             {% if not clip and event_error_text(ev.error_message) %}<p class="clip__error">{{ event_error_text(ev.error_message) }}</p>{% endif %}
         </div>
-        {% if clip %}
+        {% if clip and can_edit %}
         <div class="clip__actions">
             <form action="/web/video-clips/{{ clip.id }}/approve?next={{ next_url|urlencode }}" method="post" data-review="approve">
                 <button type="submit" class="btn btn--approve btn--block"{% if clip.status == 'APPROVED' %} hidden{% endif %}>Hyväksy <kbd aria-hidden="true">1</kbd></button>
@@ -104,7 +104,9 @@
             </form>
             {% endif %}
         </div>
-        {% elif not ev.horse %}
+        {% elif clip %}
+        <div class="clip__secondary"><a class="btn btn--quiet" href="/api/video-clips/{{ clip.id }}/download" download>Lataa video</a></div>
+        {% elif not ev.horse and can_edit %}
         <div class="clip__actions"><a class="btn" href="/web/horses?tagi={{ ev.nfc_uid }}">Yhdistä tagi hevoseen</a></div>
         {% endif %}
     </div>

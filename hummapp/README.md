@@ -288,21 +288,38 @@ Jos kamerasi käyttää muuta nimeämistapaa, säädä `FILENAME_TIMESTAMP`-sä�
 1. Avaa selaimella: `http://NAS-IP:8000` (tai HTTPS-osoite reverse proxyn kautta).
 2. Kirjaudu `.env`-tiedostossa määritetyillä admin-tunnuksilla.
 3. Käyttöliittymässä on sivut:
-   - **Katsaus** (`/`): Tallin pikanäkymät, Anteron 24h juomakuvaaja, tuoreimmat leikkeet ja ilmanlaatu.
-   - **Hevoset** (`/web/horses`): Hevosrekisteri, NFC-kytkennät ja hevoskohtainen sivu muistiinpanoineen.
-   - **NFC & Videot** (`/web/nfc-events`): Kaikki leikatut 18 s videot (testisignaalivideot merkitty `TESTIVIDEO`), hyväksyntä (`Hyväksy`), hylkäys (`Hylkää`) ja ylläpidon poisto.
-   - **Juominen** (`/web/water`): Anteron juomahistoria, vuorokausitilastot ja Chart.js -kuvaaja.
-   - **Talli-ilma** (`/web/air`): Lämpötila, kosteus, NH3, CO2 ja hiukkaset.
-   - **Järjestelmä** (`/web/system`, vain admin): Tietokannan WAL-tila, hakemistojen eheys, leikeasetukset ja hälytysloki.
+   - **Katsaus** (`/`): huomiota vaativat asiat, Anteron juominen ja talli-ilma.
+   - **Hevoset** (`/web/horses`): hevosrekisteri, NFC-kytkennät ja hevoskohtainen sivu muistiinpanoineen.
+   - **Videot** (`/web/nfc-events`): leikkeiden tarkastusjono (testisignaalivideot merkitty `TESTIVIDEO`), hyväksyntä, hylkäys ja ylläpitäjän poisto.
+   - **Juominen** (`/web/water`): Anteron juomahistoria ja vuorokausitilastot.
+   - **Talli-ilma** (`/web/air`): lämpötila, kosteus, NH3, CO2 ja hiukkaset suositusrajoineen.
+   - **Käyttäjät** (`/web/users`, vain ylläpitäjä): käyttäjätunnusten luonti, roolit, salasanat ja passivointi (kohta 19.1).
+   - **Järjestelmä** (`/web/system`, vain ylläpitäjä): hakemistojen tarkistus, leikeasetukset ja hälytysloki.
+   - **Oma tili** (`/web/account`): oman salasanan vaihto. Avautuu yläpalkin nimestä, mobiilissa linkistä Oma tili tai Asetukset.
+
+### 19.1 Käyttäjätunnukset ja roolit
+Tunnuksia ei voi luoda sovelluksesta eikä rekisteröitymällä. Ainoastaan ylläpitäjä luo ne web-käyttöliittymän **Käyttäjät**-sivulla. Ensimmäinen ylläpitäjä syntyy NASin ensimmäisellä käynnistyksellä `.env`-tiedoston `ADMIN_USERNAME`- ja `ADMIN_PASSWORD`-arvoilla.
+
+| Rooli | Oikeudet |
+|---|---|
+| **Ylläpitäjä** | Kaikki toiminnot, käyttäjähallinta, järjestelmäsivu ja videoiden poisto |
+| **Tallin käyttäjä** | NFC-leimaus, videoiden hyväksyntä ja hylkäys, hevosten ja tagien lisäys, muistiinpanot |
+| **Katselija** | Näkee tiedot ja videot, mutta ei voi muuttaa mitään |
+
+- Luo jokaiselle työntekijälle oma tunnus. Silloin pääkäyttäjän salasanaa ei tarvitse jakaa, ja merkinnöistä näkee, kuka ne teki.
+- Salasanassa pitää olla vähintään 10 merkkiä. Käyttäjä voi vaihtaa salasanansa itse Oma tili -sivulla.
+- **Passivointi** estää kirjautumisen heti ja päättää käyttäjän avoimet istunnot kaikilla laitteilla. Käyttäjän tekemät merkinnät säilyvät.
+- Salasanan vaihto ja roolin muutos kirjaavat käyttäjän ulos muilta laitteilta.
+- Viimeistä aktiivista ylläpitäjää ei voi passivoida, eikä ylläpitäjä voi poistaa omaa ylläpitäjän rooliaan.
 
 ---
 
 ## 20. Android-sovelluksen API-osoitteen määrittäminen
 1. Avaa HummAPP puhelimessa.
-2. Kirjautumisruudussa syötä **Palvelimen osoite (NAS)**:
-   - Lähiverkossa: `http://192.168.1.100:8000`
+2. Kirjautumisruudussa syötä **Palvelimen osoite**:
+   - Tailscalen kautta (suositus, kun sisäverkkoon ei ole Wi-Fi-yhteyttä): `http://100.x.y.z:8000`, ks. kohta 23
+   - Lähiverkossa: `http://192.168.1.100:8000` (sovelluksen oletus)
    - Koko Internetissä (Reverse Proxy / HTTPS): `https://hummapp.oma-talli.synology.me`
-   - Tailscale-verkossa: `http://100.x.y.z:8000`
 3. Syötä käyttäjätunnus ja salasana ja paina **Kirjaudu sisään**.
 4. Token tallennetaan salattuna laitteen `EncryptedSharedPreferences`-muistiin.
 
@@ -336,11 +353,40 @@ Reverse Proxy tarjoaa sovellukselle turvallisen HTTPS-yhteyden ja SSL-salauksen 
 ---
 
 ## 23. Tailscalen käyttäminen etäylläpitoon ja talliyhteyteen
-Jos tallilla ei ole julkista IP-osoitetta tai et halua avata portteja reitittimeen:
-1. Asenna **Tailscale** Synology Package Centeristä.
-2. Kirjaudu Tailscaleen ja ota NAS mukaan VPN-verkkoosi.
-3. Asenna Tailscale tallipuhelimeen ja omaan tietokoneeseesi.
-4. Voit nyt käyttää HummAPPia turvallisesti missä tahansa suoraan NASin Tailscale-osoitteella (esim. `http://100.x.y.z:8000`).
+Tailscale on salattu yksityisverkko. Sen avulla tallipuhelin saa yhteyden NASiin mobiilidatalla myös silloin, kun sisäverkkoon pääsee vain kaapelilla. Reitittimeen ei avata portteja, eikä NAS näy internetiin.
+
+### 23.1 Tailscale NASille
+1. Kirjaudu DSM:ään ylläpitäjänä ja avaa **Package Center** (Pakettikeskus).
+2. Hae `Tailscale` ja valitse **Install**. Paketti on Tailscalen itse ylläpitämä.
+   - Jos pakettia ei löydy NAS-mallillesi, lataa oikea `.spk`-tiedosto Tailscalen pakettipalvelimelta (pkgs.tailscale.com) ja asenna se kohdasta **Manual Install**.
+3. Kun asennus on valmis, valitse **Open**. Tailscale avaa kirjautumissivun.
+4. Kirjaudu Tailscaleen. Organisaation tiliä varten on suositeltavaa käyttää esim. Microsoft 365- tai Google-työtiliä, jotta verkko ei ole yhden henkilön yksityistilin varassa.
+5. Hyväksy NAS Tailscale-verkkoon. Avaa sen jälkeen Tailscalen hallintakonsoli (login.tailscale.com) ja välilehti **Machines**. Sieltä löytyy NASin Tailscale-osoite muotoa `100.x.y.z`.
+6. Valitse samalla NASin rivin valikosta **Disable key expiry**. Muuten NAS putoaa verkosta, kun sen avain vanhenee, oletuksena noin 180 päivän välein.
+7. Package Center päivittää Tailscalea harvoin. Ota pakettikeskuksen automaattiset päivitykset käyttöön tai päivitä paketti säännöllisesti.
+
+### 23.2 Tallipuhelimet
+1. Asenna puhelimeen **Tailscale** Google Playsta.
+2. Kirjaudu samaan Tailscale-verkkoon ja hyväksy laite hallintakonsolissa.
+3. Avaa HummAPP ja kirjoita palvelimen osoitteeksi `http://100.x.y.z:8000` (NASin Tailscale-osoite).
+4. Paina **Testaa yhteys**. Kun yhteys toimii, kirjaudu omalla käyttäjätunnuksellasi.
+
+Tailscalen pitää olla päällä puhelimessa, kun leimataan. Sovelluksen voi asettaa käynnistymään automaattisesti Tailscalen asetuksista.
+
+### 23.3 Pääsyn rajaaminen (suositus)
+Oletuksena kaikki Tailscale-verkon laitteet näkevät toisensa. Rajaa tallipuhelimet näkemään vain HummAPPin portti:
+1. Hallintakonsolissa **Access controls** -välilehdellä anna NASille tagi (esim. `tag:hummapp-nas`) ja puhelimille tagi `tag:talli`.
+2. Lisää sääntö, joka sallii puhelimille vain portin 8000:
+   ```json
+   {
+     "tagOwners": { "tag:hummapp-nas": ["autogroup:admin"], "tag:talli": ["autogroup:admin"] },
+     "acls": [
+       { "action": "accept", "src": ["tag:talli"], "dst": ["tag:hummapp-nas:8000"] },
+       { "action": "accept", "src": ["autogroup:admin"], "dst": ["*:*"] }
+     ]
+   }
+   ```
+3. Näin kadonneella tallipuhelimella ei pääse NASin hallintaan (DSM, tiedostot), vaan korkeintaan HummAPPin kirjautumissivulle. Poista kadonnut laite hallintakonsolista ja passivoi sen käyttäjä HummAPPin **Käyttäjät**-sivulla.
 
 ---
 

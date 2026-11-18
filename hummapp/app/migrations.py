@@ -22,6 +22,9 @@ COLUMN_ADDITIONS = [
     ("horses", "description", "TEXT"),
     ("nfc_events", "clock_skew_seconds", "FLOAT"),
     ("video_clips", "is_mock", "BOOLEAN NOT NULL DEFAULT 0"),
+    ("users", "display_name", "VARCHAR(128)"),
+    ("users", "token_version", "INTEGER NOT NULL DEFAULT 0"),
+    ("users", "last_login_at", "DATETIME"),
 ]
 
 INDEXES = [

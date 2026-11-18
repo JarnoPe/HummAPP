@@ -28,9 +28,9 @@ Tämä kansio sisältää valmiin HummAPP Android -mobiilisovelluksen, joka on *
 
 ## Yhteys palvelimeen
 
-Kirjautumisruudussa valitaan palvelin: AI Studio -pilottiympäristö tai paikallinen **Synology NAS** (`http://192.168.1.100:8000`). Osoitteen voi myös kirjoittaa itse (esim. reverse proxyn HTTPS-osoite tai Tailscale-osoite).
+Sovellus ottaa yhteyden tallin **Synology NASiin**. Kirjautumisruudun oletusosoite on `http://192.168.1.100:8000`, ja osoitteen voi vaihtaa vastaamaan NASin lähiverkko-osoitetta tai Tailscale-osoitetta (`http://100.x.y.z:8000`, ks. `hummapp/README.md`, kohta Tailscale). Aiempi AI Studio -demopalvelin on poistunut, ja sovellus vaihtaa siihen tallennetun osoitteen automaattisesti NAS-oletukseen.
 
-Tunnuksia ei ole esitäytetty sovellukseen eikä dokumentoitu tähän. Pääkäyttäjän tunnus ja salasana määritetään NASin `.env`-tiedostossa (`ADMIN_USERNAME`, `ADMIN_PASSWORD`).
+Tunnuksia ei ole esitäytetty sovellukseen. Pääkäyttäjän tunnus ja salasana määritetään NASin `.env`-tiedostossa (`ADMIN_USERNAME`, `ADMIN_PASSWORD`), ja pääkäyttäjä luo muille käyttäjille omat tunnukset NASin web-käyttöliittymän **Käyttäjät**-sivulla.
 
 ## Videoleikkeen ajoitus
 

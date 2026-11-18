@@ -29,10 +29,12 @@ class TokenManager(context: Context) {
         private const val KEY_USERNAME = "username"
         private const val KEY_ROLE = "role"
 
-        // AI Studio -pilottiympäristön osoite (demo)
-        const val ENV_SHARED_URL = "https://ais-pre-jjufdm4idfqg3xxnq6pytl-1003724038923.europe-west2.run.app"
+        // Oletuksena tallin Synology NAS lähiverkossa. Tailscalen kautta osoite on muotoa http://100.x.y.z:8000
         const val NAS_DEFAULT_URL = "http://192.168.1.100:8000"
-        const val DEFAULT_BASE_URL = ENV_SHARED_URL
+        const val DEFAULT_BASE_URL = NAS_DEFAULT_URL
+
+        // Poistunut AI Studio -demopalvelin: aiemmin tallennettu osoite vaihdetaan NAS-oletukseen
+        private const val RETIRED_DEMO_HOST = "run.app"
     }
 
     fun saveAuth(token: String, username: String, role: String) {
@@ -49,7 +51,8 @@ class TokenManager(context: Context) {
     }
 
     fun getBaseUrl(): String {
-        return prefs.getString(KEY_BASE_URL, DEFAULT_BASE_URL) ?: DEFAULT_BASE_URL
+        val stored = prefs.getString(KEY_BASE_URL, DEFAULT_BASE_URL) ?: DEFAULT_BASE_URL
+        return if (stored.contains(RETIRED_DEMO_HOST)) DEFAULT_BASE_URL else stored
     }
 
     fun getToken(): String? {

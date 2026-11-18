@@ -7,7 +7,7 @@
         <h1>{{ drinking_horse_name }} ja juoma-automaatti</h1>
         <p>Pilotissa juoma-automaatti on vain hevosella {{ drinking_horse_name }}. Mittaukset haetaan automaattisesti.</p>
     </div>
-    <form action="/web/water/sync" method="post"><button type="submit" class="btn">Hae uudet mittaukset</button></form>
+    {% if can_edit %}<form action="/web/water/sync" method="post"><button type="submit" class="btn">Hae uudet mittaukset</button></form>{% endif %}
 </div>
 
 {% if not antero_found %}

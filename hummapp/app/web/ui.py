@@ -61,6 +61,21 @@ FLASH_MESSAGES = {
     "hylatty": ("ok", "Leike hylätty."),
     "poistettu": ("ok", "Leike poistettu."),
     "jono-valmis": ("ok", "Kaikki leikkeet on tarkastettu."),
+    # Käyttäjähallinta
+    "kayttaja-luotu": ("ok", "Käyttäjä luotu. Anna tunnus ja salasana käyttäjälle henkilökohtaisesti."),
+    "salasana-asetettu": ("ok", "Salasana vaihdettu. Käyttäjä on kirjattu ulos muilta laitteilta."),
+    "kayttaja-passivoitu": ("ok", "Käyttäjä passivoitu. Kirjautuminen on estetty ja avoimet istunnot päättyivät."),
+    "kayttaja-aktivoitu": ("ok", "Käyttäjä otettu uudelleen käyttöön."),
+    "rooli-vaihdettu": ("ok", "Rooli vaihdettu. Käyttäjän pitää kirjautua uudelleen."),
+    "oma-salasana-vaihdettu": ("ok", "Salasanasi on vaihdettu. Muut laitteesi on kirjattu ulos."),
+    "tunnus-virheellinen": ("error", "Käyttäjätunnuksessa saa olla 3–32 merkkiä: pieniä kirjaimia a–z, numeroita, piste, viiva tai alaviiva."),
+    "tunnus-varattu": ("error", "Käyttäjätunnus on jo käytössä."),
+    "rooli-virheellinen": ("error", "Valitse rooli listasta."),
+    "salasana-lyhyt": ("error", "Salasanassa pitää olla vähintään 10 merkkiä."),
+    "salasana-vaara": ("error", "Nykyinen salasana on väärin."),
+    "salasanat-eri": ("error", "Uudet salasanat eivät täsmää."),
+    "oma-tili": ("error", "Omaa tiliä ei voi passivoida eikä sen ylläpitäjän roolia poistaa."),
+    "viimeinen-yllapitaja": ("error", "Järjestelmään pitää jäädä vähintään yksi aktiivinen ylläpitäjä."),
     "juominen-paivitetty": ("ok", "Juomamittaukset päivitetty."),
     "ilma-paivitetty": ("ok", "Anturilukemat päivitetty."),
 }
@@ -240,3 +255,14 @@ def local_day_label(now_utc: datetime.datetime) -> str:
     from app.timeutils import LOCAL_TZ, as_aware_utc
     local = as_aware_utc(now_utc).astimezone(LOCAL_TZ)
     return f"{WEEKDAYS[local.weekday()]} {local.day}.{local.month}.{local.year}"
+
+
+ROLE_LABELS = {
+    "admin": ("Ylläpitäjä", "Kaikki toiminnot, käyttäjähallinta ja videoiden poisto"),
+    "user": ("Tallin käyttäjä", "Leimaa, tarkastaa videot ja kirjaa muistiinpanot"),
+    "viewer": ("Katselija", "Näkee tiedot ja videot, ei voi muuttaa mitään"),
+}
+
+
+def role_label(role: str) -> str:
+    return ROLE_LABELS.get(role, (role, ""))[0]
