@@ -8,6 +8,9 @@
 
     <!-- NFC-oikeudet hevosten passiivitagien lukuun (required=false sallii asennuksen myös ilman NFC-sirua testattaessa) -->
     <uses-permission android:name="android.permission.NFC" />
+
+    <!-- Sovelluksen omien päivitysten asennus (käyttäjä hyväksyy jokaisen asennuksen) -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-feature
         android:name="android.hardware.nfc"
         android:required="false" />
@@ -48,6 +51,17 @@
                 android:name="android.nfc.action.TECH_DISCOVERED"
                 android:resource="@xml/nfc_tech_filter" />
         </activity>
+
+        <!-- Ladattu päivitys-APK annetaan asentajalle tämän kautta -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.updates"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/update_paths" />
+        </provider>
     </application>
 
 </manifest>

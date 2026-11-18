@@ -41,7 +41,7 @@ fun EuKaseHeaderBanner(modifier: Modifier = Modifier) {
                     contentDescription = "Euroopan unionin osarahoittama",
                     contentScale = ContentScale.Fit,
                     modifier = Modifier
-                        .height(38.dp)
+                        .height(51.dp)
                         .weight(1f, fill = false)
                 )
                 Spacer(modifier = Modifier.width(12.dp))
@@ -50,7 +50,7 @@ fun EuKaseHeaderBanner(modifier: Modifier = Modifier) {
                     contentDescription = "Kaustisen seutukunta",
                     contentScale = ContentScale.Fit,
                     modifier = Modifier
-                        .height(38.dp)
+                        .height(51.dp)
                         .weight(1f, fill = false)
                 )
             }

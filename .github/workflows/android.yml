@@ -1,5 +1,11 @@
-# Kääntää HummAPP Android -sovelluksen ja tallentaa asennettavan APK:n artefaktiksi.
-# Lataus: GitHub -> Actions -> "Android APK" -> viimeisin ajo -> Artifacts -> hummapp-debug-apk
+# Kääntää HummAPP Android -sovelluksen.
+# - Jokainen ajo tallentaa APK:n artefaktiksi (Actions -> Android APK -> Artifacts -> hummapp-apk).
+# - main-haarassa ajo julkaisee APK:n myös GitHubin Releases-sivulle tagilla android-v<versionCode>.
+#   Puhelinsovellus tarkistaa sieltä uudet versiot ja tarjoaa Päivitä-painikkeen.
+#
+# Allekirjoitus: repon salaisuudet ANDROID_KEYSTORE_BASE64 ja ANDROID_KEYSTORE_PASSWORD.
+# Ilman niitä APK allekirjoitetaan kertakäyttöisellä debug-avaimella, eikä julkaisua tehdä,
+# koska sellainen versio ei asennu vanhan päälle.
 name: Android APK
 
 on:
@@ -9,6 +15,9 @@ on:
       - ".github/workflows/android.yml"
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -17,6 +26,10 @@ jobs:
         working-directory: hummapp/android
     steps:
       - uses: actions/checkout@v4
+
+      # Kasvaa joka ajossa; 100 + ajonumero pitää numeron aiempia versioita (3) suurempana
+      - name: Versionumero
+        run: echo "HUMMAPP_VERSION_CODE=$((100 + GITHUB_RUN_NUMBER))" >> "$GITHUB_ENV"
 
       - uses: actions/setup-java@v4
         with:
@@ -31,11 +44,41 @@ jobs:
         with:
           gradle-version: "8.5"
 
-      - name: Käännä debug-APK
-        run: gradle --no-daemon assembleDebug
+      - name: Allekirjoitusavain
+        id: keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ] && [ -n "$KEYSTORE_PASSWORD" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/hummapp.jks"
+            echo "HUMMAPP_KEYSTORE_FILE=$RUNNER_TEMP/hummapp.jks" >> "$GITHUB_ENV"
+            echo "HUMMAPP_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Allekirjoitusavain puuttuu (ANDROID_KEYSTORE_BASE64 / ANDROID_KEYSTORE_PASSWORD). APK ei asennu vanhan version päälle, eikä julkaisua tehdä."
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Käännä APK
+        run: |
+          gradle --no-daemon assembleRelease
+          mkdir -p dist
+          cp app/build/outputs/apk/release/*.apk "dist/hummapp-1.3.${HUMMAPP_VERSION_CODE}.apk"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: hummapp-debug-apk
-          path: hummapp/android/app/build/outputs/apk/debug/*.apk
+          name: hummapp-apk
+          path: hummapp/android/dist/*.apk
           retention-days: 30
+
+      - name: Julkaise päivitys
+        if: github.ref == 'refs/heads/main' && steps.keystore.outputs.signed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "android-v${HUMMAPP_VERSION_CODE}" dist/*.apk \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "HummAPP Android 1.3.${HUMMAPP_VERSION_CODE}" \
+            --notes "Android-sovelluksen versio 1.3.${HUMMAPP_VERSION_CODE} (commit ${GITHUB_SHA::7}). Sovellus ilmoittaa päivityksestä itse."

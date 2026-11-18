@@ -23,6 +23,7 @@ import fi.hummapp.android.ui.components.EuKaseHeaderBanner
 import fi.hummapp.android.ui.screens.*
 import fi.hummapp.android.ui.theme.HummAppTheme
 import fi.hummapp.android.ui.theme.KaseNavy
+import fi.hummapp.android.update.UpdateBanner
 
 class MainActivity : ComponentActivity() {
 
@@ -49,7 +50,10 @@ class MainActivity : ComponentActivity() {
                 Scaffold(
                     modifier = Modifier.fillMaxSize(),
                     topBar = {
-                        EuKaseHeaderBanner()
+                        Column {
+                            EuKaseHeaderBanner()
+                            UpdateBanner()
+                        }
                     },
                     bottomBar = {
                         val currentBackStack by navController.currentBackStackEntryAsState()

@@ -232,7 +232,7 @@ export default function App() {
     <div className="min-h-screen bg-[#F8FAFC] text-[#58595B] flex flex-col">
       {/* 1. EU osarahoittama ja Kaustisen seutukunnan virallinen ylätunniste kaikilla sivuilla */}
       <div className="bg-white border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between gap-6">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between gap-3 sm:gap-6">
           <a
             href="#top"
             onClick={(e) => {
@@ -246,13 +246,27 @@ export default function App() {
               src="/assets/aistudio/fi_v_euroopan_unionin_osarahoittama_pos_ea7e28c8.jpg"
               alt="Euroopan unionin osarahoittama"
               referrerPolicy="no-referrer"
-              className="h-12 sm:h-14 w-auto object-contain"
+              className="h-[65px] sm:h-[76px] w-auto object-contain"
             />
           </a>
 
-          <div className="hidden lg:block text-center text-xs text-[#6D6E71]">
-            Kaustisen seutukunnan hevostalouden pilottihanke · Julkinen tietonäkymä (hummapp.fi)
-          </div>
+          <a
+            href="#top"
+            onClick={(e) => {
+              e.preventDefault();
+              setActiveTab('overview');
+            }}
+            className="flex items-center min-w-0 focus-visible:outline-2 focus-visible:outline-[#1B325E]"
+            aria-label="HummAPP – etusivu"
+          >
+            <img
+              src="/assets/hummapp-logo.png"
+              alt="hummapp.fi"
+              width={494}
+              height={128}
+              className="h-9 sm:h-14 lg:h-16 w-auto max-w-full object-contain"
+            />
+          </a>
 
           <a
             href="#top"
@@ -267,7 +281,7 @@ export default function App() {
               src="/assets/aistudio/KASE_logo_4a01b836.png"
               alt="Kaustisen seutukunta"
               referrerPolicy="no-referrer"
-              className="h-12 sm:h-14 w-auto object-contain"
+              className="h-[65px] sm:h-[76px] w-auto object-contain"
             />
           </a>
         </div>
@@ -289,10 +303,13 @@ export default function App() {
               e.preventDefault();
               setActiveTab('overview');
             }}
-            className="text-xl font-bold tracking-tight text-white whitespace-nowrap shrink-0"
+            className="flex items-center gap-2 text-xl font-bold tracking-tight text-white whitespace-nowrap shrink-0"
             style={{ fontFamily: 'var(--font-display)' }}
           >
-            Humm<span className="text-[#FDBE4F]">APP</span>
+            <img src="/assets/hummapp-merkki.png" alt="" width={32} height={32} className="h-8 w-8" />
+            <span>
+              Humm<span className="text-[#FDBE4F]">APP</span>
+            </span>
           </a>
 
           <nav aria-label="Päävalikko" className="hidden md:flex items-center gap-6 text-sm font-semibold overflow-x-auto">
