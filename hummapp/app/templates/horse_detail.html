@@ -38,6 +38,7 @@
         <section class="panel" aria-labelledby="muistiinpanot">
             <div class="panel__head"><h2 id="muistiinpanot">Muistiinpanot</h2><span class="panel__note num">{{ horse.notes|length }}</span></div>
             <div class="panel__body">
+                {% if can_edit %}
                 <form action="/web/horses/{{ horse.id }}/notes" method="post">
                     <div class="field">
                         <label for="note">Uusi havainto</label>
@@ -45,6 +46,7 @@
                     </div>
                     <div class="form-actions"><button type="submit" class="btn btn--primary">Tallenna muistiinpano</button></div>
                 </form>
+                {% endif %}
                 <ul class="notes scroll-area" style="margin-top: var(--space-4)">
                     {% for note in horse.notes|sort(attribute='created_at', reverse=True) %}
                     <li>
@@ -61,6 +63,7 @@
         <section class="panel" aria-labelledby="analyysit">
             <div class="panel__head"><h2 id="analyysit">Liikeanalyysit</h2><span class="panel__note num">{{ horse.analyses|length }}</span></div>
             <div class="panel__body">
+                {% if can_edit %}
                 <form action="/web/horses/{{ horse.id }}/analyses" method="post">
                     <div class="field">
                         <label for="method">Menetelmä</label>
@@ -72,6 +75,7 @@
                     </div>
                     <div class="form-actions"><button type="submit" class="btn">Tallenna analyysi</button></div>
                 </form>
+                {% endif %}
                 <ul class="notes scroll-area" style="margin-top: var(--space-4)">
                     {% for a in horse.analyses|sort(attribute='analysis_timestamp', reverse=True) %}
                     <li>

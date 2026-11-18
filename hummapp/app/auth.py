@@ -51,7 +51,7 @@ def create_access_token(data: dict, expires_delta: Optional[datetime.timedelta] 
 
 
 def create_user_token(user: User) -> str:
-    return create_access_token({"sub": user.username, "role": user.role, "uid": user.id})
+    return create_access_token({"sub": user.username, "role": user.role, "uid": user.id, "tv": user.token_version or 0})
 
 
 def create_video_link_token(clip_id: int) -> str:
@@ -102,7 +102,11 @@ def user_from_token(token: Optional[str], db: Session) -> Optional[User]:
     username = payload.get("sub")
     if not username or payload.get("scope"):
         return None
-    return db.query(User).filter(User.username == username, User.active == True).first()  # noqa: E712
+    user = db.query(User).filter(User.username == username, User.active == True).first()  # noqa: E712
+    # Salasanan vaihto tai passivointi kasvattaa versiota -> aiemmin myönnetyt tokenit hylätään
+    if user is None or payload.get("tv", 0) != (user.token_version or 0):
+        return None
+    return user
 
 
 def get_current_user(token: Optional[str] = Depends(get_token_from_request), db: Session = Depends(get_db)) -> User:

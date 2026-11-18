@@ -7,7 +7,7 @@
         <h1>Talli-ilma</h1>
         <p>{% if latest %}Viimeisin lukema klo {{ latest.measured_at|local_time("%H.%M") }}, anturi {{ latest.location or latest.sensor_id }}. Vihreä alue kuvaajassa on suositeltu vaihteluväli.{% else %}Lukemat näkyvät, kun ilmanlaatuanturi on lähettänyt ensimmäisen mittauksen.{% endif %}</p>
     </div>
-    <form action="/web/air/sync" method="post"><button type="submit" class="btn">Hae uudet lukemat</button></form>
+    {% if can_edit %}<form action="/web/air/sync" method="post"><button type="submit" class="btn">Hae uudet lukemat</button></form>{% endif %}
 </div>
 
 <div class="stack">

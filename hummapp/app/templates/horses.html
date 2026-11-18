@@ -36,6 +36,7 @@
         {% endif %}
     </section>
 
+    {% if can_edit %}
     <div class="stack">
         <section class="panel" aria-labelledby="yhdista">
             <div class="panel__head"><h2 id="yhdista">Yhdistä NFC-tagi</h2></div>
@@ -72,5 +73,6 @@
             </div>
         </section>
     </div>
+    {% endif %}
 </div>
 {% endblock %}

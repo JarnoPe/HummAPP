@@ -5,6 +5,7 @@ from app.auth import authenticate, create_user_token, get_current_user, set_auth
 from app.database import get_db
 from app.models import User
 from app.schemas import LoginRequest, TokenResponse, UserResponse
+from app.services.users import record_login
 
 router = APIRouter(tags=["Autentikointi"])
 
@@ -22,6 +23,7 @@ def login(login_data: LoginRequest, response: Response, db: Session = Depends(ge
     if not user.active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Käyttäjätili on passivoitu")
 
+    record_login(db, user)
     access_token = create_user_token(user)
     set_auth_cookie(response, access_token)
     return TokenResponse(

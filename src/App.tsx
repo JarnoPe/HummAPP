@@ -1,15 +1,10 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
-  Download,
   Droplet,
   Wind,
   Video,
   Search,
   RefreshCw,
-  Globe,
-  Server,
-  Copy,
-  Check,
   Eye,
   Lock
 } from 'lucide-react';
@@ -101,7 +96,7 @@ interface PublicOverview {
   nfc_events: NfcEventItem[];
 }
 
-type PublicTab = 'overview' | 'horses' | 'water' | 'environment' | 'deploy';
+type PublicTab = 'overview' | 'horses' | 'water' | 'environment';
 
 const LOCAL_TIMEZONE = 'Europe/Helsinki';
 const localTimestampFormat = new Intl.DateTimeFormat('fi-FI', {
@@ -155,7 +150,6 @@ export default function App() {
   const [selectedHorseId, setSelectedHorseId] = useState<number | null>(null);
   const [horseSearch, setHorseSearch] = useState('');
   const [previewClip, setPreviewClip] = useState<NfcEventItem | null>(null);
-  const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   const apiBase = useMemo(() => {
     const raw = window.HUMMAPP_PUBLIC_CONFIG?.apiBaseUrl?.trim() || '';
@@ -201,12 +195,6 @@ export default function App() {
     loadPublicData();
   }, [loadPublicData]);
 
-  const copyText = (value: string, key: string) => {
-    navigator.clipboard.writeText(value);
-    setCopiedKey(key);
-    setTimeout(() => setCopiedKey(null), 2000);
-  };
-
   const horses = data?.horses ?? [];
   const filteredHorses = useMemo(() => {
     const q = horseSearch.trim().toLowerCase();
@@ -239,8 +227,6 @@ export default function App() {
     waterDaily.length > 0
       ? waterDaily.reduce((acc, item) => acc + item.total_liters, 0) / waterDaily.length
       : 0;
-
-  const envOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://hummapp.fi';
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-[#58595B] flex flex-col">
@@ -350,16 +336,6 @@ export default function App() {
             >
               Talli-ilma ja Videot
             </button>
-            <button
-              onClick={() => setActiveTab('deploy')}
-              className={`py-1.5 border-b-2 transition-colors whitespace-nowrap shrink-0 ${
-                activeTab === 'deploy'
-                  ? 'border-[#FDBE4F] text-white'
-                  : 'border-transparent text-slate-200 hover:text-white'
-              }`}
-            >
-              Julkaisuohje
-            </button>
           </nav>
 
         </div>
@@ -389,12 +365,6 @@ export default function App() {
             className={`whitespace-nowrap shrink-0 ${activeTab === 'environment' ? 'text-[#FDBE4F]' : 'text-slate-200'}`}
           >
             Talli-ilma ja Videot
-          </button>
-          <button
-            onClick={() => setActiveTab('deploy')}
-            className={`whitespace-nowrap shrink-0 ${activeTab === 'deploy' ? 'text-[#FDBE4F]' : 'text-slate-200'}`}
-          >
-            Julkaisuohje
           </button>
         </div>
       </header>
@@ -999,116 +969,6 @@ export default function App() {
           </div>
         )}
 
-        {/* =============================================================== */}
-        {/* 5. HUMMAPP.FI JULKAISU */}
-        {/* =============================================================== */}
-        {activeTab === 'deploy' && (
-          <div className="space-y-6">
-            <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-5">
-              <div>
-                <h1 className="text-2xl font-bold text-[#1B325E]">Julkinen hummapp.fi-verkkosivusto</h1>
-                <p className="text-sm text-[#58595B] mt-1">
-                  Kaikki tarvittavat paketit ovat ladattavissa suoraan alta. GitHub Pages riittää julkisen
-                  hummapp.fi-sivuston ilmaiseen julkaisuun ilman erillistä web-hotellia.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="border border-slate-200 rounded-xl p-5 space-y-3 flex flex-col justify-between">
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-2 text-[#1B325E] font-bold">
-                      <Globe className="w-4 h-4 text-[#C60651]" />
-                      <span>hummapp.fi-verkkosivupaketti</span>
-                    </div>
-                    <p className="text-xs text-[#6D6E71] leading-relaxed">
-                      Valmis staattinen verkkosivusto GitHub Pagesiin: sisältää CNAME-tiedoston (hummapp.fi), EU- ja KASE-logot, vain luku -näkymän ja config.js-osoiteasetuksen.
-                    </p>
-                  </div>
-                  <a
-                    href="/hummapp-fi-website.zip"
-                    download="hummapp-fi-website.zip"
-                    className="w-full py-2 px-4 bg-[#C60651] hover:bg-[#a30542] text-white text-xs font-bold rounded-lg text-center transition-colors inline-flex items-center justify-center gap-2"
-                  >
-                    <Download className="w-4 h-4" />
-                    <span>Lataa hummapp-fi-website.zip</span>
-                  </a>
-                </div>
-
-                <div className="border border-slate-200 rounded-xl p-5 space-y-3 flex flex-col justify-between">
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-2 text-[#1B325E] font-bold">
-                      <Server className="w-4 h-4 text-[#00A34D]" />
-                      <span>Synology NAS -taustajärjestelmä</span>
-                    </div>
-                    <p className="text-xs text-[#6D6E71] leading-relaxed">
-                      Docker + FastAPI + SQLite WAL + FFmpeg -paketti Synology NASille. Käsittelee kameratallenteet, NFC-rajapinnan ja mittausdatan.
-                    </p>
-                  </div>
-                  <a
-                    href="/hummapp.zip"
-                    download="hummapp.zip"
-                    className="w-full py-2 px-4 border border-slate-300 hover:border-[#1B325E] text-[#1B325E] text-xs font-bold rounded-lg text-center transition-colors inline-flex items-center justify-center gap-2"
-                  >
-                    <Download className="w-4 h-4" />
-                    <span>Lataa hummapp.zip</span>
-                  </a>
-                </div>
-              </div>
-            </div>
-
-            {/* DNS ja GitHub Pages ohjeet */}
-            <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
-              <h2 className="text-lg font-bold text-[#1B325E]">Käyttöönotto hummapp.fi-verkkotunnukselle ilman web-hotellia</h2>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 text-xs text-[#58595B] leading-relaxed">
-                <div className="space-y-3">
-                  <h3 className="text-sm font-bold text-[#1B325E]">1. GitHub Pages julkiselle sivustolle</h3>
-                  <p>
-                    <strong>GitHub Pages riittää ilmaiseksi</strong> julkisen sivuston (HTML/CSS/JS) hostaukseen. Se ei aja tietokantaa, joten live-data haetaan Synology NASilta tai tämän ympäristön osoitteesta:
-                  </p>
-                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg font-mono flex items-center justify-between gap-2">
-                    <span className="truncate text-[#1B325E]">{envOrigin}</span>
-                    <button
-                      onClick={() => copyText(envOrigin, 'origin')}
-                      className="p-1.5 hover:bg-slate-200 rounded shrink-0"
-                      title="Kopioi osoite"
-                    >
-                      {copiedKey === 'origin' ? <Check className="w-3.5 h-3.5 text-[#00A34D]" /> : <Copy className="w-3.5 h-3.5" />}
-                    </button>
-                  </div>
-                  <ol className="list-decimal pl-5 space-y-1">
-                    <li>Luo GitHubiin julkinen repositorio (esim. <code className="font-mono">hummapp-fi</code>) ja pura siihen <code className="font-mono">hummapp-fi-website.zip</code>.</li>
-                    <li>Avaa <code className="font-mono">Settings → Pages</code> ja valitse haara <code className="font-mono">main</code> (<code className="font-mono">/ (root)</code>).</li>
-                    <li>Syötä Custom domain -kenttään <code className="font-mono">hummapp.fi</code> ja ota käyttöön <strong>Enforce HTTPS</strong>.</li>
-                  </ol>
-                </div>
-
-                <div className="space-y-3">
-                  <h3 className="text-sm font-bold text-[#1B325E]">2. Domain-palveluntarjoajan DNS-tietueet</h3>
-                  <p>Lisää verkkotunnuksen hallintapaneeliin seuraavat DNS-ohjaukset:</p>
-                  <div className="overflow-x-auto border border-slate-200 rounded-lg">
-                    <table className="w-full text-left font-mono text-[11px]">
-                      <thead className="bg-slate-50 border-b border-slate-200 text-[#6D6E71]">
-                        <tr>
-                          <th className="py-2 px-3">Tyyppi</th>
-                          <th className="py-2 px-3">Nimi</th>
-                          <th className="py-2 px-3">Arvo</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        <tr><td className="py-1.5 px-3">A</td><td className="py-1.5 px-3">@</td><td className="py-1.5 px-3">185.199.108.153</td></tr>
-                        <tr><td className="py-1.5 px-3">A</td><td className="py-1.5 px-3">@</td><td className="py-1.5 px-3">185.199.109.153</td></tr>
-                        <tr><td className="py-1.5 px-3">A</td><td className="py-1.5 px-3">@</td><td className="py-1.5 px-3">185.199.110.153</td></tr>
-                        <tr><td className="py-1.5 px-3">A</td><td className="py-1.5 px-3">@</td><td className="py-1.5 px-3">185.199.111.153</td></tr>
-                        <tr><td className="py-1.5 px-3">CNAME</td><td className="py-1.5 px-3">www</td><td className="py-1.5 px-3">&lt;tunnuksesi&gt;.github.io</td></tr>
-                        <tr><td className="py-1.5 px-3">CNAME</td><td className="py-1.5 px-3">api</td><td className="py-1.5 px-3">&lt;oma-nas&gt;.synology.me</td></tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
       </main>
 
       {/* Alapalkki */}
@@ -1116,11 +976,6 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row justify-between items-center gap-3">
           <div>
             HummAPP Pilotti · Kaustisen seutukunta · Euroopan unionin osarahoittama · hummapp.fi
-          </div>
-          <div className="flex items-center gap-4">
-            <a href="/hummapp-fi-website.zip" download className="text-[#C60651] hover:underline font-semibold">
-              hummapp.fi-sivupaketti (.zip)
-            </a>
           </div>
         </div>
       </footer>

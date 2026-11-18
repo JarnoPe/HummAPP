@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.auth import COOKIE_NAME, authenticate, create_user_token, get_token_from_request, set_auth_cookie, user_from_token
 from app.config import settings
-from app.constants import ClipStatus, Role
+from app.constants import EDITOR_ROLES, ClipStatus, Role
 from app.database import get_db
 from app.models import utc_now
 from app.models import (
@@ -27,6 +27,7 @@ from app.models import (
     VideoClip,
     WaterMeasurement,
 )
+from app.services import users as users_service
 from app.services import video_review
 from app.services.air_quality import air_quality_service
 from app.services.horses import assign_nfc_tag, find_horse_by_name, get_drinking_horse
@@ -39,6 +40,7 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 templates.env.filters["local_time"] = local_time_label
 templates.env.filters["num"] = ui.format_number
 templates.env.globals.update(
+    role_label=ui.role_label,
     clip_seconds=settings.clip_duration_seconds,
     clip_before=settings.VIDEO_SECONDS_BEFORE,
     clip_after=settings.VIDEO_SECONDS_AFTER,
@@ -67,6 +69,13 @@ def get_web_user(token: Optional[str] = Depends(get_token_from_request), db: Ses
 def require_web_user(user: Optional[User] = Depends(get_web_user)) -> User:
     if not user:
         raise WebLoginRequired()
+    return user
+
+
+def require_web_editor(user: User = Depends(require_web_user)) -> User:
+    """Muutokset vaativat ylläpitäjän tai tallin käyttäjän roolin (katselija näkee vain)."""
+    if user.role not in EDITOR_ROLES:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Katselija-rooli ei voi muuttaa tietoja.")
     return user
 
 
@@ -105,6 +114,7 @@ def render(request: Request, template: str, user: Optional[User], active_page: s
         "active_page": active_page,
         "flash": ui.flash_for(request.query_params.get("ilmoitus")),
         "pending_reviews": pending_review_count(db) if (db is not None and user) else 0,
+        "can_edit": bool(user and user.role in EDITOR_ROLES),
     }
     return templates.TemplateResponse(request, template, {**base, **context})
 
@@ -123,6 +133,7 @@ def login_post(request: Request, username: str = Form(...), password: str = Form
         response = render(request, "login.html", None, error=message)
         response.status_code = status.HTTP_400_BAD_REQUEST
         return response
+    users_service.record_login(db, user)
     response = redirect("/")
     set_auth_cookie(response, create_user_token(user))
     return response
@@ -208,7 +219,7 @@ def horses_page(request: Request, db: Session = Depends(get_db), user: User = De
 
 
 @router.post("/web/horses/create")
-def horse_create_post(name: str = Form(...), db: Session = Depends(get_db), user: User = Depends(require_web_user)):
+def horse_create_post(name: str = Form(...), db: Session = Depends(get_db), user: User = Depends(require_web_editor)):
     cleaned = name.strip()
     if not cleaned:
         return redirect("/web/horses", "nimi-puuttuu")
@@ -224,7 +235,7 @@ def assign_tag_post(
     horse_id: int = Form(...),
     nfc_uid: str = Form(...),
     db: Session = Depends(get_db),
-    user: User = Depends(require_web_user),
+    user: User = Depends(require_web_editor),
 ):
     if not db.get(Horse, horse_id):
         raise HTTPException(status_code=404, detail="Hevosta ei löydy.")
@@ -252,7 +263,7 @@ def horse_detail_page(horse_id: int, request: Request, db: Session = Depends(get
 
 @router.post("/web/horses/{horse_id}/notes")
 def add_horse_note_post(horse_id: int, content: str = Form(...), db: Session = Depends(get_db),
-                        user: User = Depends(require_web_user)):
+                        user: User = Depends(require_web_editor)):
     if content.strip() and db.get(Horse, horse_id):
         db.add(HorseNote(horse_id=horse_id, content=content.strip(), user_id=user.id))
         db.commit()
@@ -266,7 +277,7 @@ def add_horse_analysis_post(
     analysis_method: str = Form(...),
     summary: str = Form(...),
     db: Session = Depends(get_db),
-    user: User = Depends(require_web_user),
+    user: User = Depends(require_web_editor),
 ):
     if db.get(Horse, horse_id) and summary.strip():
         db.add(MovementAnalysis(horse_id=horse_id, analysis_method=analysis_method.strip(),
@@ -331,13 +342,13 @@ def _review_web(request: Request, db: Session, clip_id: int, new_status: ClipSta
 
 @router.post("/web/video-clips/{clip_id}/approve")
 def approve_clip_web(clip_id: int, request: Request, next: Optional[str] = None, db: Session = Depends(get_db),
-                     user: User = Depends(require_web_user)):
+                     user: User = Depends(require_web_editor)):
     return _review_web(request, db, clip_id, ClipStatus.APPROVED, next)
 
 
 @router.post("/web/video-clips/{clip_id}/reject")
 def reject_clip_web(clip_id: int, request: Request, next: Optional[str] = None, db: Session = Depends(get_db),
-                    user: User = Depends(require_web_user)):
+                    user: User = Depends(require_web_editor)):
     return _review_web(request, db, clip_id, ClipStatus.REJECTED, next)
 
 
@@ -390,7 +401,7 @@ def water_page(request: Request, db: Session = Depends(get_db), user: User = Dep
 
 
 @router.post("/web/water/sync")
-async def sync_water_web(db: Session = Depends(get_db), user: User = Depends(require_web_user)):
+async def sync_water_web(db: Session = Depends(get_db), user: User = Depends(require_web_editor)):
     await water_service.sync_measurements(db)
     return redirect("/web/water", "juominen-paivitetty")
 
@@ -413,9 +424,97 @@ def air_page(request: Request, db: Session = Depends(get_db), user: User = Depen
 
 
 @router.post("/web/air/sync")
-async def sync_air_web(db: Session = Depends(get_db), user: User = Depends(require_web_user)):
+async def sync_air_web(db: Session = Depends(get_db), user: User = Depends(require_web_editor)):
     await air_quality_service.sync_air_readings(db)
     return redirect("/web/air", "ilma-paivitetty")
+
+
+# --- Käyttäjät (vain ylläpitäjä) ---------------------------------------------
+def _user_or_404(db: Session, user_id: int) -> User:
+    target = db.get(User, user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="Käyttäjää ei löydy.")
+    return target
+
+
+@router.get("/web/users", response_class=HTMLResponse)
+def users_page(request: Request, db: Session = Depends(get_db), user: User = Depends(require_web_admin)):
+    return render(request, "users.html", user, "users", db, users=users_service.list_users(db),
+                  role_choices=users_service.ROLE_CHOICES, role_labels=ui.ROLE_LABELS,
+                  min_password=users_service.MIN_PASSWORD_LENGTH)
+
+
+@router.post("/web/users/create")
+def users_create(
+    username: str = Form(...),
+    password: str = Form(...),
+    role: str = Form(...),
+    display_name: str = Form(""),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_web_admin),
+):
+    try:
+        users_service.create_user(db, username, password, role, display_name)
+    except users_service.UserError as e:
+        return redirect("/web/users", e.code)
+    return redirect("/web/users", "kayttaja-luotu")
+
+
+@router.post("/web/users/{user_id}/password")
+def users_reset_password(user_id: int, password: str = Form(...), db: Session = Depends(get_db),
+                         user: User = Depends(require_web_admin)):
+    try:
+        users_service.set_password(db, _user_or_404(db, user_id), password)
+    except users_service.UserError as e:
+        return redirect("/web/users", e.code)
+    return redirect("/web/users", "salasana-asetettu")
+
+
+@router.post("/web/users/{user_id}/active")
+def users_set_active(user_id: int, active: str = Form(...), db: Session = Depends(get_db),
+                     user: User = Depends(require_web_admin)):
+    make_active = active == "1"
+    try:
+        users_service.set_active(db, user, _user_or_404(db, user_id), make_active)
+    except users_service.UserError as e:
+        return redirect("/web/users", e.code)
+    return redirect("/web/users", "kayttaja-aktivoitu" if make_active else "kayttaja-passivoitu")
+
+
+@router.post("/web/users/{user_id}/role")
+def users_set_role(user_id: int, role: str = Form(...), db: Session = Depends(get_db),
+                   user: User = Depends(require_web_admin)):
+    try:
+        users_service.set_role(db, user, _user_or_404(db, user_id), role)
+    except users_service.UserError as e:
+        return redirect("/web/users", e.code)
+    return redirect("/web/users", "rooli-vaihdettu")
+
+
+# --- Oma tili ---------------------------------------------------------------
+@router.get("/web/account", response_class=HTMLResponse)
+def account_page(request: Request, db: Session = Depends(get_db), user: User = Depends(require_web_user)):
+    return render(request, "account.html", user, "account", db, min_password=users_service.MIN_PASSWORD_LENGTH)
+
+
+@router.post("/web/account/password")
+def account_change_password(
+    current_password: str = Form(...),
+    new_password: str = Form(...),
+    new_password_again: str = Form(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_web_user),
+):
+    if new_password != new_password_again:
+        return redirect("/web/account", "salasanat-eri")
+    try:
+        users_service.change_own_password(db, user, current_password, new_password)
+    except users_service.UserError as e:
+        return redirect("/web/account", e.code)
+    # Tämä selain pysyy kirjautuneena uudella tokenilla, muut laitteet kirjautuvat ulos
+    response = redirect("/web/account", "oma-salasana-vaihdettu")
+    set_auth_cookie(response, create_user_token(user))
+    return response
 
 
 # --- Järjestelmä --------------------------------------------------------------

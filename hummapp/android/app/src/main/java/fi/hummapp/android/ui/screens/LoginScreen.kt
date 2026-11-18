@@ -104,38 +104,17 @@ fun LoginScreen(
             }
         }
 
-        // Pikavalinnat ympäristöille
-        Text(
-            text = "Valitse yhteysosoite:",
-            fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 6.dp)
-        )
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            FilterChip(
-                selected = serverUrl == TokenManager.ENV_SHARED_URL,
-                onClick = { serverUrl = TokenManager.ENV_SHARED_URL },
-                label = { Text("Pilottiympäristö", fontSize = 11.sp) }
-            )
-            FilterChip(
-                selected = serverUrl == TokenManager.NAS_DEFAULT_URL,
-                onClick = { serverUrl = TokenManager.NAS_DEFAULT_URL },
-                label = { Text("Synology NAS", fontSize = 11.sp) }
-            )
-        }
-
         OutlinedTextField(
             value = serverUrl,
             onValueChange = { serverUrl = it },
             label = { Text("Palvelimen osoite (URL)") },
-            placeholder = { Text(TokenManager.ENV_SHARED_URL) },
+            placeholder = { Text(TokenManager.NAS_DEFAULT_URL) },
+            supportingText = {
+                Text(
+                    "Tallin NASin osoite: lähiverkossa esim. ${TokenManager.NAS_DEFAULT_URL}, Tailscalen kautta http://100.x.y.z:8000",
+                    fontSize = 11.sp
+                )
+            },
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )

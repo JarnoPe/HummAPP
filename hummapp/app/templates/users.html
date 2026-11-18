@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}Käyttäjät{% endblock %}
+{% block content %}
+<div class="page-head">
+    <div>
+        <h1>Käyttäjät</h1>
+        <p>Luo jokaiselle tallin työntekijälle oma tunnus. Pääkäyttäjän salasanaa ei silloin tarvitse jakaa, ja merkinnöistä näkee, kuka ne teki.</p>
+    </div>
+</div>
+
+<div class="grid-sidebar">
+    <section class="panel" aria-labelledby="kayttajalista">
+        <div class="panel__head">
+            <h2 id="kayttajalista">Tunnukset</h2>
+            <span class="panel__note num">{{ users|selectattr('active')|list|length }} aktiivista</span>
+        </div>
+        <ul class="userlist">
+            {% for u in users %}
+            <li class="{{ '' if u.active else 'is-inactive' }}">
+                <div class="userlist__who">
+                    <span class="userlist__name">{{ u.display_name or u.username }}</span>
+                    <span class="userlist__meta">
+                        <code>{{ u.username }}</code>
+                        {% if not u.active %}<span class="status status--muted">Passivoitu</span>
+                        {% elif u.last_login_at %}<span>Kirjautunut viimeksi {{ u.last_login_at|local_time('%d.%m.%Y klo %H.%M') }}</span>
+                        {% else %}<span>Ei vielä kirjautunut</span>{% endif %}
+                        {% if u.id == current_user.id %}<span class="tag-chip">Sinä</span>{% endif %}
+                    </span>
+                </div>
+
+                <form class="userlist__role" action="/web/users/{{ u.id }}/role" method="post">
+                    <label class="visually-hidden" for="role-{{ u.id }}">Käyttäjän {{ u.username }} rooli</label>
+                    <select class="input" id="role-{{ u.id }}" name="role" onchange="this.form.requestSubmit()"{% if u.id == current_user.id or not u.active %} disabled{% endif %}>
+                        {% for r in role_choices %}<option value="{{ r }}"{% if u.role == r %} selected{% endif %}>{{ role_labels[r][0] }}</option>{% endfor %}
+                    </select>
+                    <noscript><button class="btn btn--quiet" type="submit">Vaihda rooli</button></noscript>
+                </form>
+
+                <div class="userlist__actions">
+                    {% if u.active %}
+                    <details class="disclosure">
+                        <summary class="btn btn--quiet">Aseta salasana</summary>
+                        <form action="/web/users/{{ u.id }}/password" method="post" class="disclosure__body">
+                            <label for="pw-{{ u.id }}">Uusi salasana käyttäjälle {{ u.username }}</label>
+                            <input class="input" type="password" id="pw-{{ u.id }}" name="password" required minlength="{{ min_password }}" autocomplete="new-password">
+                            <p class="field__hint">Vähintään {{ min_password }} merkkiä. Käyttäjä kirjataan ulos kaikilta laitteilta.</p>
+                            <button type="submit" class="btn btn--primary">Tallenna salasana</button>
+                        </form>
+                    </details>
+                    {% if u.id != current_user.id %}
+                    <form action="/web/users/{{ u.id }}/active" method="post"
+                          onsubmit="return confirm('Passivoidaanko {{ u.username }}? Kirjautuminen estyy heti kaikilla laitteilla.')">
+                        <input type="hidden" name="active" value="0">
+                        <button type="submit" class="btn btn--danger">Passivoi</button>
+                    </form>
+                    {% endif %}
+                    {% else %}
+                    <form action="/web/users/{{ u.id }}/active" method="post">
+                        <input type="hidden" name="active" value="1">
+                        <button type="submit" class="btn">Ota käyttöön</button>
+                    </form>
+                    {% endif %}
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+    </section>
+
+    <div class="stack">
+        <section class="panel" aria-labelledby="uusi-kayttaja">
+            <div class="panel__head"><h2 id="uusi-kayttaja">Lisää käyttäjä</h2></div>
+            <div class="panel__body">
+                <form action="/web/users/create" method="post" autocomplete="off">
+                    <div class="field">
+                        <label for="new-name">Nimi</label>
+                        <input class="input" id="new-name" name="display_name" maxlength="128" placeholder="Esim. Maija Meikäläinen">
+                    </div>
+                    <div class="field">
+                        <label for="new-username">Käyttäjätunnus</label>
+                        <input class="input" id="new-username" name="username" required pattern="[a-z0-9][a-z0-9._\-]{2,31}" maxlength="32"
+                               autocapitalize="none" spellcheck="false" placeholder="maija">
+                        <p class="field__hint">Pieniä kirjaimia a–z, numeroita, piste, viiva tai alaviiva. Ei ääkkösiä.</p>
+                    </div>
+                    <div class="field">
+                        <label for="new-password">Salasana</label>
+                        <input class="input" type="password" id="new-password" name="password" required minlength="{{ min_password }}" autocomplete="new-password">
+                        <p class="field__hint">Vähintään {{ min_password }} merkkiä. Käyttäjä voi vaihtaa sen itse Oma tili -sivulla.</p>
+                    </div>
+                    <fieldset class="field roles">
+                        <legend>Rooli</legend>
+                        {% for r in role_choices %}
+                        <label class="roles__option">
+                            <input type="radio" name="role" value="{{ r }}"{% if r == 'user' %} checked{% endif %}>
+                            <span><strong>{{ role_labels[r][0] }}</strong><span class="roles__desc">{{ role_labels[r][1] }}</span></span>
+                        </label>
+                        {% endfor %}
+                    </fieldset>
+                    <div class="form-actions"><button type="submit" class="btn btn--primary btn--block">Lisää käyttäjä</button></div>
+                </form>
+            </div>
+        </section>
+        <p class="small muted">Passivoitu käyttäjä ei pääse kirjautumiseen, ja hänen avoimet istuntonsa päättyvät heti. Hänen tekemänsä merkinnät säilyvät.</p>
+    </div>
+</div>
+{% endblock %}

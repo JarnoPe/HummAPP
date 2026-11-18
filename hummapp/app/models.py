@@ -29,6 +29,10 @@ class User(Base):
     role = Column(String(32), nullable=False, default="user")  # admin, user, viewer
     active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=utc_now, nullable=False)
+    display_name = Column(String(128), nullable=True)
+    # Kasvatetaan, kun salasana vaihtuu tai tili passivoidaan -> vanhat kirjautumiset mitätöityvät
+    token_version = Column(Integer, default=0, nullable=False)
+    last_login_at = Column(DateTime, nullable=True)
 
     notes = relationship("HorseNote", back_populates="author")
     nfc_events = relationship("NfcEvent", back_populates="user")

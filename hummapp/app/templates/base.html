@@ -41,13 +41,14 @@
                 </a>
                 {% endfor %}
                 {% if current_user.role == 'admin' %}
+                <a href="/web/users"{% if active_page == 'users' %} aria-current="page"{% endif %}>Käyttäjät</a>
                 <a href="/web/system"{% if active_page == 'system' %} aria-current="page"{% endif %}>Järjestelmä</a>
                 {% endif %}
             </nav>
             <div class="usermenu">
-                <span class="usermenu__name">{{ current_user.username }}</span>
-                <span class="usermenu__role">{{ {'admin': 'ylläpitäjä', 'user': 'tallin käyttäjä', 'viewer': 'katselija'}.get(current_user.role, current_user.role) }}</span>
-                {% if current_user.role == 'admin' %}<a class="usermenu__system" href="/web/system">Järjestelmä</a>{% endif %}
+                <a class="usermenu__name" href="/web/account" title="Oma tili ja salasanan vaihto">{{ current_user.display_name or current_user.username }}</a>
+                <span class="usermenu__role">{{ role_label(current_user.role)|lower }}</span>
+                <a class="usermenu__system" href="/web/account">{{ 'Asetukset' if current_user.role == 'admin' else 'Oma tili' }}</a>
                 <a href="/web/logout">Kirjaudu ulos</a>
             </div>
             {% endif %}

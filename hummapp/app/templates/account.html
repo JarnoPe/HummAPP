@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Oma tili{% endblock %}
+{% block content %}
+<div class="page-head">
+    <div>
+        <h1>Oma tili</h1>
+        <p>Kirjautuneena: <strong>{{ current_user.display_name or current_user.username }}</strong> (<code>{{ current_user.username }}</code>), rooli {{ role_label(current_user.role)|lower }}.</p>
+    </div>
+</div>
+
+<div class="grid-halves">
+    <section class="panel" aria-labelledby="salasana">
+        <div class="panel__head"><h2 id="salasana">Vaihda salasana</h2></div>
+        <div class="panel__body">
+            <form action="/web/account/password" method="post">
+                <div class="field">
+                    <label for="current">Nykyinen salasana</label>
+                    <input class="input" type="password" id="current" name="current_password" required autocomplete="current-password">
+                </div>
+                <div class="field">
+                    <label for="new">Uusi salasana</label>
+                    <input class="input" type="password" id="new" name="new_password" required minlength="{{ min_password }}" autocomplete="new-password">
+                    <p class="field__hint">Vähintään {{ min_password }} merkkiä. Muut laitteesi, myös tallipuhelin, kirjataan ulos.</p>
+                </div>
+                <div class="field">
+                    <label for="again">Uusi salasana uudelleen</label>
+                    <input class="input" type="password" id="again" name="new_password_again" required minlength="{{ min_password }}" autocomplete="new-password">
+                </div>
+                <div class="form-actions"><button type="submit" class="btn btn--primary">Vaihda salasana</button></div>
+            </form>
+        </div>
+    </section>
+
+    {% if current_user.role == 'admin' %}
+    <section class="panel" aria-labelledby="hallinta">
+        <div class="panel__head"><h2 id="hallinta">Ylläpito</h2></div>
+        <div class="panel__body">
+            <ul class="eventlist">
+                <li><div><div class="eventlist__who">Käyttäjät</div><div class="eventlist__when">Tunnusten luonti, roolit ja passivointi</div></div><a class="btn" href="/web/users">Avaa</a></li>
+                <li><div><div class="eventlist__who">Järjestelmä</div><div class="eventlist__when">Asetukset, tarkistukset ja hälytykset</div></div><a class="btn" href="/web/system">Avaa</a></li>
+            </ul>
+        </div>
+    </section>
+    {% endif %}
+</div>
+{% endblock %}
