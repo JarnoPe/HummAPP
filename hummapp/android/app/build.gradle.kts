@@ -11,8 +11,12 @@ android {
         applicationId = "fi.hummapp.android"
         minSdk = 26
         targetSdk = 34
-        versionCode = 3
-        versionName = "1.2.0"
+        // CI antaa versionumeron (ks. .github/workflows/android.yml); paikallisessa käännöksessä 3.
+        versionCode = (System.getenv("HUMMAPP_VERSION_CODE") ?: "3").toInt()
+        versionName = "1.3.$versionCode"
+
+        // Päivitystarkistus hakee uusimman julkaisun tämän GitHub-repon Releases-sivulta
+        buildConfigField("String", "UPDATE_REPO", "\"JarnoPe/HummAPP\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -20,8 +24,27 @@ android {
         }
     }
 
+    // Pysyvä allekirjoitusavain, jotta uusi versio asentuu vanhan päälle.
+    // CI purkaa avaimen GitHub-salaisuudesta ja antaa polun ympäristömuuttujassa.
+    val releaseKeystore = System.getenv("HUMMAPP_KEYSTORE_FILE")?.takeIf { it.isNotBlank() }
+    signingConfigs {
+        if (releaseKeystore != null) {
+            create("hummapp") {
+                storeFile = file(releaseKeystore)
+                storePassword = System.getenv("HUMMAPP_KEYSTORE_PASSWORD")
+                keyAlias = "hummapp"
+                keyPassword = System.getenv("HUMMAPP_KEYSTORE_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig = if (releaseKeystore != null) {
+                signingConfigs.getByName("hummapp")
+            } else {
+                signingConfigs.getByName("debug")
+            }
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
