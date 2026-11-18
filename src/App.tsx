@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   Download,
-  Smartphone,
   Droplet,
   Wind,
   Video,
@@ -363,16 +362,6 @@ export default function App() {
             </button>
           </nav>
 
-          <div className="flex items-center gap-3 shrink-0">
-            <a
-              href="/hummapp-android.zip"
-              download="hummapp-android.zip"
-              className="inline-flex items-center gap-2 px-4 py-2 bg-[#C60651] hover:bg-[#a30542] text-white text-xs font-bold rounded-lg transition-colors whitespace-nowrap shrink-0"
-            >
-              <Smartphone className="w-4 h-4" />
-              <span>Lataa Android</span>
-            </a>
-          </div>
         </div>
 
         {/* Mobiilivalikko kapeille näytöille */}
@@ -466,14 +455,6 @@ export default function App() {
                 >
                   Selaa hevosia
                 </button>
-                <a
-                  href="/hummapp-android.zip"
-                  download="hummapp-android.zip"
-                  className="px-5 py-2.5 border border-slate-300 hover:border-[#1B325E] text-[#1B325E] text-sm font-semibold rounded-lg transition-colors inline-flex items-center justify-center gap-2 whitespace-nowrap shrink-0"
-                >
-                  <Download className="w-4 h-4" />
-                  <span>Android-sovellus (.zip)</span>
-                </a>
               </div>
             </section>
 
@@ -635,7 +616,7 @@ export default function App() {
                   Avaa hevosluettelo →
                 </button>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {horses.slice(0, 3).map((h) => (
                   <button
                     key={h.id}
@@ -1019,13 +1000,13 @@ export default function App() {
         )}
 
         {/* =============================================================== */}
-        {/* 5. HUMMAPP.FI JULKAISU & ANDROID-LATAUKSET */}
+        {/* 5. HUMMAPP.FI JULKAISU */}
         {/* =============================================================== */}
         {activeTab === 'deploy' && (
           <div className="space-y-6">
             <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-5">
               <div>
-                <h1 className="text-2xl font-bold text-[#1B325E]">Julkinen hummapp.fi-verkkosivusto ja Android-sovellus</h1>
+                <h1 className="text-2xl font-bold text-[#1B325E]">Julkinen hummapp.fi-verkkosivusto</h1>
                 <p className="text-sm text-[#58595B] mt-1">
                   Kaikki tarvittavat paketit ovat ladattavissa suoraan alta. GitHub Pages riittää julkisen
                   hummapp.fi-sivuston ilmaiseen julkaisuun ilman erillistä web-hotellia.
@@ -1050,26 +1031,6 @@ export default function App() {
                   >
                     <Download className="w-4 h-4" />
                     <span>Lataa hummapp-fi-website.zip</span>
-                  </a>
-                </div>
-
-                <div className="border border-slate-200 rounded-xl p-5 space-y-3 flex flex-col justify-between">
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-2 text-[#1B325E] font-bold">
-                      <Smartphone className="w-4 h-4 text-[#135367]" />
-                      <span>Android Kotlin -sovellus</span>
-                    </div>
-                    <p className="text-xs text-[#6D6E71] leading-relaxed">
-                      EU- ja Kaustisen seutukunta -brändätty Android Studio -projekti. Sisältää hevostietojen muokkauksen, muistiinpanojen lisäyksen, NFC-luvun ja juoma-automaatin.
-                    </p>
-                  </div>
-                  <a
-                    href="/hummapp-android.zip"
-                    download="hummapp-android.zip"
-                    className="w-full py-2 px-4 bg-[#1B325E] hover:bg-[#135367] text-white text-xs font-bold rounded-lg text-center transition-colors inline-flex items-center justify-center gap-2"
-                  >
-                    <Download className="w-4 h-4" />
-                    <span>Lataa hummapp-android.zip</span>
                   </a>
                 </div>
 
@@ -1159,9 +1120,6 @@ export default function App() {
           <div className="flex items-center gap-4">
             <a href="/hummapp-fi-website.zip" download className="text-[#C60651] hover:underline font-semibold">
               hummapp.fi-sivupaketti (.zip)
-            </a>
-            <a href="/hummapp-android.zip" download className="text-[#1B325E] hover:underline font-semibold">
-              Android-sovellus (.zip)
             </a>
           </div>
         </div>
