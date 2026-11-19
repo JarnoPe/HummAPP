@@ -1,8 +1,7 @@
-import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef, useId } from 'react';
 import {
   Droplet,
   Thermometer,
-  Video,
   Search,
   RefreshCw,
   Clock,
@@ -16,8 +15,10 @@ import {
   Info,
   Mail,
   ExternalLink,
+  Table as TableIcon,
 } from 'lucide-react';
 import { METRICS, SOURCES, FINNISH_LAW, LEVEL_META, levelFor, type Level, type MetricDef } from './thresholds';
+import { t, metricText, setLang, locale, type Lang } from './i18n';
 
 declare global {
   interface Window {
@@ -52,7 +53,7 @@ interface PublicHorse {
   stall_box: string | null;
   description: string | null;
   created_at: string;
-  has_nfc_tag: boolean;
+  has_nfc_tag?: boolean;
   notes: HorseNote[];
   analyses: MovementAnalysis[];
 }
@@ -81,29 +82,14 @@ interface StableAirMeasurement {
   particulate_matter: number | null;
 }
 
-interface NfcEventItem {
-  id: number;
-  horse_id: number | null;
-  horse_name: string | null;
-  phone_timestamp: string;
-  location: string | null;
-  status: string;
-  video_clip_id: number | null;
-  video_clip_status: string | null;
-}
-
 interface PublicOverview {
   read_only: boolean;
   generated_at: string;
   drinking_horse_name: string;
-  clip_seconds_before?: number;
-  clip_seconds_after?: number;
-  public_video_enabled?: boolean;
   horses: PublicHorse[];
   water_daily: WaterDailySummary[];
   water_measurements: WaterMeasurement[];
   air_readings: StableAirMeasurement[];
-  nfc_events: NfcEventItem[];
 }
 
 type PublicTab = 'overview' | 'horses' | 'water' | 'environment';
@@ -121,12 +107,45 @@ const TAB_PATHS: Record<PublicTab, string> = {
   environment: '#/talli-ilma',
 };
 
-const NAV_ITEMS: { tab: PublicTab; label: string }[] = [
-  { tab: 'overview', label: 'Katsaus' },
-  { tab: 'horses', label: 'Hevoset' },
-  { tab: 'water', label: 'Juominen' },
-  { tab: 'environment', label: 'Talli-ilma' },
-];
+const NAV_TABS: PublicTab[] = ['overview', 'horses', 'water', 'environment'];
+
+// --- Kieli: ?lang=en osoitteessa, muuten tallennettu valinta, oletuksena suomi
+function initialLang(): Lang {
+  const q = new URLSearchParams(window.location.search).get('lang');
+  if (q === 'en' || q === 'fi') return q;
+  try {
+    const saved = window.localStorage.getItem('hummapp-lang');
+    if (saved === 'en' || saved === 'fi') return saved;
+  } catch {
+    // selaimen tallennus ei käytettävissä
+  }
+  return 'fi';
+}
+
+function useLang(): [Lang, (l: Lang) => void] {
+  const [lang, setLangState] = useState<Lang>(initialLang);
+  setLang(lang);
+  useEffect(() => {
+    const s = t();
+    document.documentElement.lang = lang;
+    document.title = s.docTitle;
+    document.querySelector('meta[name="description"]')?.setAttribute('content', s.docDescription);
+  }, [lang]);
+  const change = useCallback((l: Lang) => {
+    setLang(l);
+    setLangState(l);
+    try {
+      window.localStorage.setItem('hummapp-lang', l);
+    } catch {
+      // ei tallennusta
+    }
+    const url = new URL(window.location.href);
+    if (l === 'fi') url.searchParams.delete('lang');
+    else url.searchParams.set('lang', l);
+    window.history.replaceState(null, '', url.toString());
+  }, []);
+  return [lang, change];
+}
 
 function parseRoute(hash: string): Route {
   const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean);
@@ -159,17 +178,19 @@ function useHashRoute(): Route {
 
 // --- Muotoilu
 const LOCAL_TIMEZONE = 'Europe/Helsinki';
-const localTimestampFormat = new Intl.DateTimeFormat('fi-FI', {
-  timeZone: LOCAL_TIMEZONE,
-  day: 'numeric',
-  month: 'numeric',
-  year: 'numeric',
-  hour: '2-digit',
-  minute: '2-digit',
-});
-const dayLabelFormat = new Intl.DateTimeFormat('fi-FI', { weekday: 'short', day: 'numeric', month: 'numeric', timeZone: 'UTC' });
+const localTimestampFormat = () =>
+  new Intl.DateTimeFormat(locale(), {
+    timeZone: LOCAL_TIMEZONE,
+    day: 'numeric',
+    month: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+const dayLabelFormat = () =>
+  new Intl.DateTimeFormat(locale(), { weekday: 'short', day: 'numeric', month: 'numeric', timeZone: 'UTC' });
 const numberFormat = (decimals: number) =>
-  new Intl.NumberFormat('fi-FI', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  new Intl.NumberFormat(locale(), { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 
 // Palvelin palauttaa UTC-ajat; aikavyöhyketön ISO-merkkijono tulkitaan UTC:ksi.
 function parseUtc(iso: string): Date {
@@ -179,12 +200,12 @@ function parseUtc(iso: string): Date {
 function formatLocalTimestamp(iso: string | null | undefined): string {
   if (!iso) return '–';
   const date = parseUtc(iso);
-  return Number.isNaN(date.getTime()) ? '–' : localTimestampFormat.format(date);
+  return Number.isNaN(date.getTime()) ? '–' : localTimestampFormat().format(date);
 }
 
 function formatDay(dateKey: string): string {
   const d = new Date(`${dateKey}T12:00:00Z`);
-  return Number.isNaN(d.getTime()) ? dateKey : dayLabelFormat.format(d);
+  return Number.isNaN(d.getTime()) ? dateKey : dayLabelFormat().format(d);
 }
 
 function fmt(value: number | null | undefined, decimals: number): string {
@@ -193,18 +214,19 @@ function fmt(value: number | null | undefined, decimals: number): string {
 }
 
 function statusLabelFi(status: string): { label: string; level: Level | 'neutral' } {
+  const L = t().status;
   switch (status) {
     case 'APPROVED':
-      return { label: 'Hyväksytty', level: 'good' };
+      return { label: L.APPROVED, level: 'good' };
     case 'READY':
-      return { label: 'Valmis tarkastettavaksi', level: 'neutral' };
+      return { label: L.READY, level: 'neutral' };
     case 'PROCESSING':
     case 'WAITING_FOR_RECORDING':
-      return { label: 'Käsittelyssä', level: 'warn' };
+      return { label: L.PROCESSING, level: 'warn' };
     case 'REJECTED':
-      return { label: 'Hylätty', level: 'neutral' };
+      return { label: L.REJECTED, level: 'neutral' };
     default:
-      return { label: 'Virhe', level: 'bad' };
+      return { label: L.ERROR, level: 'bad' };
   }
 }
 
@@ -212,6 +234,8 @@ const CARD = 'relative bg-white border border-[#E3E8EF] rounded-2xl shadow-[0_1p
 const LINK = 'text-[#C60651] font-medium hover:underline underline-offset-4';
 
 export default function App() {
+  const [lang, changeLang] = useLang();
+  const s = t();
   const route = useHashRoute();
   const activeTab = route.tab;
   const [data, setData] = useState<PublicOverview | null>(null);
@@ -219,7 +243,6 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [horseSearch, setHorseSearch] = useState('');
-  const [previewClip, setPreviewClip] = useState<NfcEventItem | null>(null);
 
   const apiBase = useMemo(() => {
     const raw = window.HUMMAPP_PUBLIC_CONFIG?.apiBaseUrl?.trim() || '';
@@ -251,7 +274,7 @@ export default function App() {
       } catch {
         // jatketaan virheilmoitukseen
       }
-      setLoadError('Tietoja ei saatu ladattua. Yritä hetken päästä uudelleen.');
+      setLoadError('error');
       setIsLoading(false);
     }
   }, [apiBase]);
@@ -264,11 +287,8 @@ export default function App() {
   const waterDaily = data?.water_daily ?? [];
   const waterList = data?.water_measurements ?? [];
   const airReadings = data?.air_readings ?? [];
-  const nfcEvents = data?.nfc_events ?? [];
   const latestAir = airReadings[0] ?? null;
   const drinkingHorse = data?.drinking_horse_name || 'Antero';
-  const clipBefore = data?.clip_seconds_before ?? 5;
-  const clipAfter = data?.clip_seconds_after ?? 13;
 
   const latestWater = waterDaily[waterDaily.length - 1];
   const avgWater = waterDaily.length
@@ -294,18 +314,14 @@ export default function App() {
         href="#main"
         className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:bg-white focus:px-4 focus:py-3 focus:rounded-lg focus:text-[#1B325E]"
       >
-        Siirry sisältöön
+        {s.skip}
       </a>
 
       {/* Rahoittajien ja omistajan tunnukset (EU-näkyvyys) */}
       <div className="bg-white">
         <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-2 sm:py-3 flex items-center justify-between gap-4">
-          <img
-            src="/assets/aistudio/fi_v_euroopan_unionin_osarahoittama_pos_ea7e28c8.jpg"
-            alt="Euroopan unionin osarahoittama"
-            className="h-12 sm:h-16 w-auto object-contain"
-          />
-          <a href={TAB_PATHS.overview} aria-label="HummAPP – etusivu" className="min-w-0 min-h-11 flex items-center">
+          <EuLogo lang={lang} alt={s.euAlt} />
+          <a href={TAB_PATHS.overview} aria-label={s.homeAria} className="min-w-0 min-h-11 flex items-center">
             <img
               src="/assets/hummapp-logo.png"
               alt="hummapp.fi"
@@ -316,7 +332,7 @@ export default function App() {
           </a>
           <img
             src="/assets/aistudio/KASE_logo_4a01b836.png"
-            alt="Kaustisen seutukunta"
+            alt={s.kaseAlt}
             className="h-12 sm:h-16 w-auto object-contain"
           />
         </div>
@@ -339,26 +355,27 @@ export default function App() {
               Humm<span className="text-[#FDBE4F]">APP</span>
             </span>
           </a>
-          <nav aria-label="Päävalikko" className="flex-1 md:flex-none md:ml-auto overflow-x-auto">
-            <ul className="flex items-stretch gap-1 md:gap-2">
-              {NAV_ITEMS.map((item) => {
-                const isActive = activeTab === item.tab;
+          <nav aria-label={s.navAria} className="flex-1 min-w-0 md:flex-none md:ml-auto overflow-x-auto">
+            <ul className="flex items-stretch md:gap-2">
+              {NAV_TABS.map((tab) => {
+                const isActive = activeTab === tab;
                 return (
-                  <li key={item.tab} className="shrink-0">
+                  <li key={tab} className="shrink-0">
                     <a
-                      href={TAB_PATHS[item.tab]}
+                      href={TAB_PATHS[tab]}
                       aria-current={isActive ? 'page' : undefined}
-                      className={`flex items-center min-h-12 md:min-h-14 px-3 text-[15px] font-medium whitespace-nowrap border-b-[3px] ${
+                      className={`flex items-center min-h-12 md:min-h-14 px-2 md:px-3 text-[15px] font-medium whitespace-nowrap border-b-[3px] ${
                         isActive ? 'border-[#FDBE4F] text-white' : 'border-transparent text-[#C0E1F0] hover:text-white'
                       }`}
                     >
-                      {item.label}
+                      {s.nav[tab]}
                     </a>
                   </li>
                 );
               })}
             </ul>
           </nav>
+          <LangSwitch lang={lang} onChange={changeLang} label={s.langSwitch} />
         </div>
       </header>
 
@@ -366,14 +383,14 @@ export default function App() {
         {loadError && (
           <div className="max-w-[1200px] mx-auto px-4 sm:px-6 pt-6">
             <div role="alert" className={`${CARD} p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4`}>
-              <p className="text-base text-[#A1342C]">{loadError}</p>
+              <p className="text-base text-[#A1342C]">{s.loadError}</p>
               <button
                 type="button"
                 onClick={loadPublicData}
                 className="inline-flex items-center justify-center gap-2 min-h-11 px-5 rounded-xl bg-[#1B325E] text-white font-medium"
               >
                 <RefreshCw className="w-4 h-4" aria-hidden="true" />
-                Lataa uudelleen
+                {s.reload}
               </button>
             </div>
           </div>
@@ -395,8 +412,6 @@ export default function App() {
                 avgWater={avgWater}
                 drinkingHorse={drinkingHorse}
                 horses={horses}
-                nfcCount={nfcEvents.length}
-                clipSeconds={clipBefore + clipAfter}
               />
             )}
 
@@ -423,24 +438,7 @@ export default function App() {
             )}
 
             {activeTab === 'environment' && (
-              <EnvironmentPage
-                airReadings={airReadings}
-                nfcEvents={nfcEvents}
-                clipBefore={clipBefore}
-                clipAfter={clipAfter}
-                canPlayVideo={(ev) =>
-                  Boolean(
-                    ev.video_clip_id &&
-                      dataSourceMode === 'live' &&
-                      data?.public_video_enabled === true &&
-                      (ev.video_clip_status === 'READY' || ev.video_clip_status === 'APPROVED')
-                  )
-                }
-                previewClip={previewClip}
-                onPreview={setPreviewClip}
-                apiBase={apiBase}
-                updatedAt={updatedAt}
-              />
+              <EnvironmentPage airReadings={airReadings} updatedAt={updatedAt} />
             )}
           </>
         )}
@@ -449,29 +447,22 @@ export default function App() {
       <footer className="bg-[#1B325E] text-[#C0E1F0] mt-16" aria-labelledby="project-title">
         <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-12 grid gap-10 md:grid-cols-[1.3fr_1fr_1fr]">
           <div className="space-y-3">
-            <p className="text-sm font-medium text-[#FDBE4F]">Hanke</p>
+            <p className="text-sm font-medium text-[#FDBE4F]">{s.footProject}</p>
             <h2 id="project-title" className="font-display text-2xl font-semibold text-white">KP AlkIoT</h2>
-            <p className="text-[15px] leading-relaxed max-w-[52ch]">
-              HummAPP on osa KP AlkIoT -hanketta, joka parantaa hevosten hyvinvointia Keski-Pohjanmaalla. Hankkeessa
-              kehitetään ja pilotoidaan IoT-ratkaisuja, joilla hevosten hyvinvointia voi seurata reaaliajassa.
-            </p>
+            <p className="text-[15px] leading-relaxed max-w-[52ch]">{s.footText}</p>
             <a
               href="https://hevostenhyvinvointi.fi/kpalkiot-hankekuvaus/"
               target="_blank"
               rel="noopener noreferrer"
+              hrefLang="fi"
               className="inline-flex items-center gap-1.5 min-h-11 text-[15px] font-medium text-white underline underline-offset-4 decoration-white/30 hover:decoration-white"
             >
-              Lue hankekuvaus <ExternalLink className="w-4 h-4" aria-hidden="true" />
+              {s.footReadMore} <ExternalLink className="w-4 h-4" aria-hidden="true" />
             </a>
           </div>
 
           <dl className="grid gap-4 text-[15px] content-start">
-            {[
-              { t: 'Toteuttajat', d: 'Kaustisen seutukunta ja Kpedu (EIP-yhteistyöhanke)' },
-              { t: 'Rahoittaja', d: 'Pohjanmaan ELY-keskus, Euroopan maaseuturahasto' },
-              { t: 'Toteutusaika', d: '1.1.2025–31.12.2026' },
-              { t: 'Kohderyhmä', d: 'Keski-Pohjanmaan hevostilat, eläinlääkärit ja ohjelmistoyritykset' },
-            ].map((r) => (
+            {s.footFacts.map((r) => (
               <div key={r.t}>
                 <dt className="text-sm text-[#9FC3D6]">{r.t}</dt>
                 <dd className="text-white">{r.d}</dd>
@@ -480,11 +471,8 @@ export default function App() {
           </dl>
 
           <div className="space-y-3">
-            <p className="text-sm text-[#9FC3D6]">Yhteystiedot</p>
-            {[
-              { n: 'Jarno Peltola', r: 'Projektipäällikkö, Kaustisen seutukunta', e: 'jarno.peltola@kaustisenseutukunta.fi' },
-              { n: 'Marika Kuutti', r: 'Projektikoordinaattori, Kpedu', e: 'marika.kuutti@kpedu.fi' },
-            ].map((c) => (
+            <p className="text-sm text-[#9FC3D6]">{s.footContacts}</p>
+            {s.contacts.map((c) => (
               <div key={c.e} className="text-[15px]">
                 <p className="text-white font-medium">{c.n}</p>
                 <p>{c.r}</p>
@@ -505,6 +493,64 @@ export default function App() {
 // Yhteiset osat
 // =====================================================================
 
+// FI / EN -valinta yläpalkissa
+function LangSwitch({ lang, onChange, label }: { lang: Lang; onChange: (l: Lang) => void; label: string }) {
+  const options: { l: Lang; text: string; title: string }[] = [
+    { l: 'fi', text: 'FI', title: 'Suomeksi' },
+    { l: 'en', text: 'EN', title: 'In English' },
+  ];
+  const other = options.find((o) => o.l !== lang)!;
+  return (
+    <>
+      {/* Kapealla näytöllä yksi painike, joka vaihtaa toiseen kieleen */}
+      <button
+        type="button"
+        lang={other.l}
+        aria-label={other.title}
+        title={other.title}
+        onClick={() => onChange(other.l)}
+        className="md:hidden shrink-0 min-w-11 min-h-11 px-2 rounded-lg border border-white/25 text-sm font-semibold text-white"
+      >
+        {other.text}
+      </button>
+      <div role="group" aria-label={label} className="hidden md:flex items-center shrink-0 ml-2 gap-0.5">
+        {options.map((o) => (
+          <button
+            key={o.l}
+            type="button"
+            lang={o.l}
+            title={o.title}
+            aria-pressed={lang === o.l}
+            onClick={() => onChange(o.l)}
+            className={`min-w-11 min-h-11 px-2 rounded-lg text-sm font-semibold ${
+              lang === o.l ? 'bg-white text-[#1B325E]' : 'text-[#C0E1F0] hover:text-white'
+            }`}
+          >
+            {o.text}
+          </button>
+        ))}
+      </div>
+    </>
+  );
+}
+
+// EU-tunnus kielen mukaan. Englanninkielinen tunnus haetaan tiedostosta /assets/eu-cofunded-en.png;
+// jos sitä ei ole, näytetään suomenkielinen.
+const EU_LOGO_FI = '/assets/aistudio/fi_v_euroopan_unionin_osarahoittama_pos_ea7e28c8.jpg';
+const EU_LOGO_EN = '/assets/eu-cofunded-en.png';
+function EuLogo({ lang, alt }: { lang: Lang; alt: string }) {
+  const [enMissing, setEnMissing] = useState(false);
+  const src = lang === 'en' && !enMissing ? EU_LOGO_EN : EU_LOGO_FI;
+  return (
+    <img
+      src={src}
+      alt={alt}
+      onError={() => lang === 'en' && setEnMissing(true)}
+      className="h-12 sm:h-16 w-auto object-contain"
+    />
+  );
+}
+
 function PageContainer({ children }: { children: React.ReactNode }) {
   return <div className="max-w-[1200px] mx-auto px-4 sm:px-6">{children}</div>;
 }
@@ -517,7 +563,7 @@ function LevelIcon({ level, className = 'w-4 h-4' }: { level: Level; className?:
 }
 
 function StatusChip({ level }: { level: Level | null }) {
-  if (!level) return <span className="text-sm text-[#6D6E71]">Ei tietoa</span>;
+  if (!level) return <span className="text-sm text-[#6D6E71]">{t().noData}</span>;
   const m = LEVEL_META[level];
   return (
     <span
@@ -525,7 +571,7 @@ function StatusChip({ level }: { level: Level | null }) {
       style={{ background: m.tint, color: m.text }}
     >
       <LevelIcon level={level} />
-      {m.label}
+      {t().levels[level]}
     </span>
   );
 }
@@ -534,7 +580,7 @@ function UpdatedLine({ updatedAt, dark = false }: { updatedAt: string; dark?: bo
   return (
     <span className={`inline-flex items-center gap-2 text-sm ${dark ? 'text-[#C0E1F0]' : 'text-[#6D6E71]'}`}>
       <Clock className="w-4 h-4" aria-hidden="true" />
-      Päivitetty <span className="tabular-nums">{updatedAt}</span>
+      {t().updated} <span className="tabular-nums">{updatedAt}</span>
     </span>
   );
 }
@@ -603,7 +649,7 @@ function SourcesInfo() {
     >
       <button
         type="button"
-        aria-label="Suositusrajojen lähteet"
+        aria-label={t().sourcesAria}
         aria-expanded={open}
         aria-controls={id}
         onClick={() => setOpen((v) => !v)}
@@ -616,30 +662,29 @@ function SourcesInfo() {
           ref={popRef}
           id={id}
           role="dialog"
-          aria-label="Suositusrajojen lähteet"
+          aria-label={t().sourcesAria}
           className="absolute left-0 top-full z-30 pt-1"
           style={{ transform: `translateX(${shift}px)` }}
         >
           <div className="w-[320px] max-w-[calc(100vw-2rem)] rounded-xl border border-[#E3E8EF] bg-white p-4 shadow-[0_8px_24px_rgba(16,24,40,0.08)] text-sm">
-            <p className="font-medium text-[#1B325E]">Mistä rajat tulevat?</p>
+            <p className="font-medium text-[#1B325E]">{t().sourcesTitle}</p>
             <ul className="mt-2 divide-y divide-[#EDF0F4]">
-              {SOURCES.map((src) => (
+              {SOURCES.map((src, i) => (
                 <li key={src.url} className="py-2">
                   <a href={src.url} target="_blank" rel="noopener noreferrer" className={`${LINK} inline-flex items-start gap-1`}>
-                    {src.title}
+                    {t().sources[i]?.title ?? src.title}
                     <ExternalLink className="w-3.5 h-3.5 mt-[3px] shrink-0" aria-hidden="true" />
                   </a>
-                  <span className="block text-[#6D6E71]">{src.note}</span>
+                  <span className="block text-[#6D6E71]">{t().sources[i]?.note ?? src.note}</span>
                 </li>
               ))}
             </ul>
             <p className="mt-2 text-[#6D6E71] leading-snug">
-              Suomen{' '}
+              {t().sourcesLawBefore}{' '}
               <a href={FINNISH_LAW.url} target="_blank" rel="noopener noreferrer" className={LINK}>
-                hevosasetus
+                {t().sourcesLawLink}
               </a>{' '}
-              ei anna lukuarvoja. Vihreä noudattaa lähteiden suositusta; keltaisen ja punaisen rajat ovat HummAPPin
-              tulkinta.
+              {t().sourcesLawAfter}
             </p>
           </div>
         </div>
@@ -659,7 +704,7 @@ function MoreLink({ href, children }: { href: string; children: React.ReactNode 
 
 function LoadingSkeleton() {
   return (
-    <div aria-busy="true" aria-label="Ladataan tietoja">
+    <div aria-busy="true" aria-label={t().loading}>
       <div className="bg-[#1B325E] h-72" />
       <PageContainer>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 -mt-10">
@@ -750,19 +795,19 @@ function AvgNote({ def, avg, instant }: { def: MetricDef; avg: NonNullable<Metri
       <ul className="space-y-1">
         <li className="flex items-center gap-2">
           <span className="w-[5px] h-3.5 rounded-full bg-[#1B325E] shrink-0" aria-hidden="true" />
-          Vuorokauden keskiarvo ({avg.n} {avg.n === 1 ? 'mittaus' : 'mittausta'})
+          {t().avgLabel(avg.n)}
         </li>
         <li className="flex items-center gap-2">
           <span className="w-3 h-3 rounded-full bg-white border-2 border-[#1B325E] shrink-0" aria-hidden="true" />
           <span>
-            Viimeisin mittaus{' '}
+            {t().latestLabel}{' '}
             <span className="font-medium text-[#1B325E] tabular-nums">
               {fmt(instant, def.decimals)} {def.unit}
             </span>
           </span>
         </li>
       </ul>
-      {partial && <p>Mittauksia on alle vuorokauden ajalta, joten keskiarvo on suuntaa antava.</p>}
+      {partial && <p>{t().avgPartial}</p>}
     </div>
   );
 }
@@ -772,7 +817,7 @@ function AirMetricCard({ def, readings }: { def: MetricDef; readings: StableAirM
   return (
     <div className={`${CARD} p-5 flex flex-col gap-3`}>
       <div className="flex items-start justify-between gap-3">
-        <h3 className="text-[15px] font-medium text-[#1B325E]">{def.label}</h3>
+        <h3 className="text-[15px] font-medium text-[#1B325E]">{metricText(def).label}</h3>
         <StatusChip level={level} />
       </div>
       <p className="font-display text-4xl font-semibold text-[#1B325E] tabular-nums tracking-tight">
@@ -781,7 +826,7 @@ function AirMetricCard({ def, readings }: { def: MetricDef; readings: StableAirM
       </p>
       <RangeGauge def={def} value={value} instant={avg ? instant : undefined} />
       {avg && <AvgNote def={def} avg={avg} instant={instant} />}
-      <p className="text-sm text-[#6D6E71] leading-snug">{def.guide}</p>
+      <p className="text-sm text-[#6D6E71] leading-snug">{metricText(def).guide}</p>
     </div>
   );
 }
@@ -796,9 +841,32 @@ function WaterChart({
   avgWater: number;
   height?: number;
 }) {
+  // Näppäimistö: kaavio on yksi sarkainpysähdys, ja päivästä toiseen liikutaan nuolinäppäimillä
+  const [focusIdx, setFocusIdx] = useState<number | null>(null);
+  const [showTable, setShowTable] = useState(false);
+  const barRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const tableId = useId();
   if (waterDaily.length === 0) {
-    return <p className="text-base text-[#6D6E71] py-10 text-center">Juomamittauksia ei ole vielä kirjattu.</p>;
+    return <p className="text-base text-[#6D6E71] py-10 text-center">{t().chartEmpty}</p>;
   }
+  const rovingIdx = focusIdx ?? waterDaily.length - 1;
+  const onBarsKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const last = waterDaily.length - 1;
+    const next =
+      e.key === 'ArrowRight' || e.key === 'ArrowDown'
+        ? Math.min(last, rovingIdx + 1)
+        : e.key === 'ArrowLeft' || e.key === 'ArrowUp'
+          ? Math.max(0, rovingIdx - 1)
+          : e.key === 'Home'
+            ? 0
+            : e.key === 'End'
+              ? last
+              : null;
+    if (next === null) return;
+    e.preventDefault();
+    setFocusIdx(next);
+    barRefs.current[next]?.focus();
+  };
   const max = Math.max(...waterDaily.map((d) => d.total_liters), avgWater);
   const top = Math.max(10, Math.ceil((max * 1.1) / 10) * 10);
   const ticks: number[] = [];
@@ -829,19 +897,28 @@ function WaterChart({
           {/* keskiarvo */}
           <div className="absolute inset-x-0 border-t-2 border-dashed border-[#FDBE4F] z-10" style={{ bottom: `${avgPct}%` }} aria-hidden="true">
             <span className="absolute left-0 -top-6 text-xs font-medium text-[#1B325E] bg-white/90 px-1 rounded">
-              ka {fmt(avgWater, 1)} l
+              {t().chartAvg} {fmt(avgWater, 1)} l
             </span>
           </div>
           {/* pylväät */}
-          <div className="absolute inset-0 flex items-end gap-[6px] sm:gap-3" role="list">
+          <div
+            className="absolute inset-0 flex items-end gap-[6px] sm:gap-3"
+            role="list"
+            aria-label={t().chartListAria}
+            onKeyDown={onBarsKey}
+          >
             {waterDaily.map((d, idx) => {
               const isLatest = idx === waterDaily.length - 1;
               return (
                 <div
                   key={d.date}
                   role="listitem"
-                  tabIndex={0}
-                  aria-label={`${formatDay(d.date)}: ${fmt(d.total_liters, 1)} litraa, ${d.measurement_count} juomiskertaa`}
+                  ref={(el) => {
+                    barRefs.current[idx] = el;
+                  }}
+                  tabIndex={idx === rovingIdx ? 0 : -1}
+                  onFocus={() => setFocusIdx(idx)}
+                  aria-label={t().chartBarAria(formatDay(d.date), fmt(d.total_liters, 1), d.measurement_count)}
                   className="group relative flex-1 h-full flex items-end rounded-t-[4px]"
                 >
                   <div
@@ -860,7 +937,7 @@ function WaterChart({
                   <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block group-focus:block z-20 whitespace-nowrap rounded-lg bg-[#1B325E] px-3 py-2 text-sm text-white shadow-[0_4px_12px_rgba(16,24,40,0.08)]">
                     <span className="block font-medium tabular-nums">{fmt(d.total_liters, 1)} l</span>
                     <span className="block text-xs text-[#C0E1F0]">
-                      {formatDay(d.date)} · {d.measurement_count} kertaa
+                      {formatDay(d.date)} · {t().chartTimes(d.measurement_count)}
                     </span>
                   </div>
                 </div>
@@ -876,22 +953,54 @@ function WaterChart({
           {waterDaily.map((d) => (
             <span key={d.date} className="flex-1 text-center truncate">
               <span className="hidden sm:inline">{formatDay(d.date)}</span>
-              <span className="sm:hidden">{d.date.slice(8).replace(/^0/, '')}.</span>
+              <span className="sm:hidden">{t().dayShort(Number(d.date.slice(8)))}</span>
             </span>
           ))}
         </div>
       </div>
       <figcaption className="flex flex-wrap items-center gap-x-5 gap-y-1 mt-4 text-sm text-[#6D6E71]">
         <span className="inline-flex items-center gap-2">
-          <span className="w-3 h-3 rounded-[3px] bg-[#135367]" aria-hidden="true" /> Litraa vuorokaudessa
+          <span className="w-3 h-3 rounded-[3px] bg-[#135367]" aria-hidden="true" /> {t().chartLegendDay}
         </span>
         <span className="inline-flex items-center gap-2">
-          <span className="w-3 h-3 rounded-[3px] bg-[#C60651]" aria-hidden="true" /> Viimeisin vuorokausi
+          <span className="w-3 h-3 rounded-[3px] bg-[#C60651]" aria-hidden="true" /> {t().chartLegendLatest}
         </span>
         <span className="inline-flex items-center gap-2">
-          <span className="w-4 border-t-2 border-dashed border-[#FDBE4F]" aria-hidden="true" /> Keskiarvo
+          <span className="w-4 border-t-2 border-dashed border-[#FDBE4F]" aria-hidden="true" /> {t().chartLegendAvg}
         </span>
+        <button
+          type="button"
+          aria-expanded={showTable}
+          aria-controls={tableId}
+          onClick={() => setShowTable((v) => !v)}
+          className={`ml-auto inline-flex items-center gap-1.5 min-h-11 text-[15px] ${LINK}`}
+        >
+          <TableIcon className="w-4 h-4" aria-hidden="true" />
+          {showTable ? t().chartHideTable : t().chartShowTable}
+        </button>
       </figcaption>
+      {showTable && (
+        <div id={tableId} className="mt-3 overflow-x-auto rounded-xl border border-[#E3E8EF]">
+          <table className="w-full text-left text-[15px]">
+            <thead>
+              <tr className="border-b border-[#E3E8EF] text-sm text-[#6D6E71]">
+                <th scope="col" className="py-2.5 px-4 font-medium">{t().colDay}</th>
+                <th scope="col" className="py-2.5 px-4 font-medium text-right">{t().colLitres}</th>
+                <th scope="col" className="py-2.5 px-4 font-medium text-right">{t().colDrinks}</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#EDF0F4]">
+              {waterDaily.map((d) => (
+                <tr key={d.date}>
+                  <td className="py-2.5 px-4 tabular-nums">{formatDay(d.date)}</td>
+                  <td className="py-2.5 px-4 text-right font-medium text-[#1B325E] tabular-nums">{fmt(d.total_liters, 1)}</td>
+                  <td className="py-2.5 px-4 text-right tabular-nums">{d.measurement_count}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </figure>
   );
 }
@@ -911,8 +1020,6 @@ function OverviewPage({
   avgWater,
   drinkingHorse,
   horses,
-  nfcCount,
-  clipSeconds,
 }: {
   updatedAt: string;
   live: boolean;
@@ -924,8 +1031,6 @@ function OverviewPage({
   avgWater: number;
   drinkingHorse: string;
   horses: PublicHorse[];
-  nfcCount: number;
-  clipSeconds: number;
 }) {
   const levels = METRICS.map((m) => ({ def: m, ...summarizeMetric(m, airReadings) }));
   const goodCount = levels.filter((l) => l.level === 'good').length;
@@ -933,12 +1038,13 @@ function OverviewPage({
   const diff = latestWater ? latestWater.total_liters - avgWater : 0;
   const tempDef = METRICS[0];
 
+  const s = t();
   const headline =
     levels.some((l) => l.level === 'bad')
-      ? 'Talli-ilmassa on korjattavaa'
+      ? s.airHeadlineBad
       : levels.every((l) => l.level === 'good')
-        ? 'Talli-ilma on suositusten mukainen'
-        : 'Talli-ilma on pääosin hyvä';
+        ? s.airHeadlineGood
+        : s.airHeadlineMostly;
 
   return (
     <>
@@ -947,19 +1053,18 @@ function OverviewPage({
         <PageContainer>
           <div className="grid gap-10 lg:grid-cols-[1.25fr_1fr] items-center pt-12 pb-24 sm:pt-16 sm:pb-28">
             <div className="space-y-5">
-              <p className="text-sm font-medium text-[#FDBE4F]">Kaustisen seutukunnan hevostallipilotti</p>
+              <p className="text-sm font-medium text-[#FDBE4F]">{s.heroEyebrow}</p>
               <h1 id="hero-title" className="font-display text-4xl sm:text-5xl lg:text-[56px] font-semibold leading-[1.08] tracking-tight text-white text-balance">
-                Miten tallin hevoset voivat?
+                {s.heroTitle}
               </h1>
               <p className="text-lg text-[#DCEEF6] leading-relaxed max-w-[56ch]">
-                HummAPP kokoaa tallin anturien, juoma-automaatin ja NFC-kuvausten tiedot yhteen. Näet yhdellä
-                silmäyksellä, juovatko hevoset normaalisti ja onko talli-ilma suositusten mukaista.
+                {s.heroText}
               </p>
               <div className="flex flex-wrap items-center gap-x-5 gap-y-3 pt-1">
                 {live && (
                   <span className="inline-flex items-center gap-2 text-sm text-white">
                     <span className="w-2 h-2 rounded-full bg-[#00A34D]" aria-hidden="true" />
-                    Reaaliaikainen
+                    {s.live}
                   </span>
                 )}
                 <UpdatedLine updatedAt={updatedAt} dark />
@@ -970,7 +1075,7 @@ function OverviewPage({
                     className="inline-flex items-center gap-2 min-h-11 px-4 rounded-xl border border-white/25 text-sm font-medium text-white hover:bg-white/10"
                   >
                     <RefreshCw className={`w-4 h-4 ${isLoading ? 'motion-safe:animate-spin' : ''}`} aria-hidden="true" />
-                    Päivitä tiedot
+                    {s.refresh}
                   </button>
                 )}
               </div>
@@ -978,11 +1083,11 @@ function OverviewPage({
 
             {/* Ilmanlaadun yhteenveto */}
             <div className="rounded-2xl bg-[#22396B] border border-white/10 p-6 sm:p-7">
-              <p className="text-sm text-[#C0E1F0]">Viimeisin mittaus{latestAir?.location ? ` · ${latestAir.location}` : ''}</p>
+              <p className="text-sm text-[#C0E1F0]">{s.latestMeasurement}{latestAir?.location ? ` · ${latestAir.location}` : ''}</p>
               <p className="font-display text-2xl font-semibold text-white mt-1">{headline}</p>
               <p className="mt-4 flex items-baseline gap-2">
                 <span className="font-display text-6xl font-semibold tabular-nums text-white">{goodCount}</span>
-                <span className="text-lg text-[#C0E1F0]">/ {METRICS.length} mittaria hyvällä tasolla</span>
+                <span className="text-lg text-[#C0E1F0]">{s.goodOf(METRICS.length)}</span>
               </p>
               <div className="flex gap-[3px] mt-4" aria-hidden="true">
                 {levels.map(({ def, level }) => (
@@ -997,10 +1102,10 @@ function OverviewPage({
                 {levels.map(({ def, level, value, avg, instant }) => (
                   <li key={def.key} className="flex items-center justify-between gap-3 py-2.5 text-[15px]">
                     <span className="text-white">
-                      {def.label}
+                      {metricText(def).label}
                       {avg && (
                         <span className="block text-sm text-[#C0E1F0] tabular-nums">
-                          vrk:n keskiarvo · nyt {fmt(instant, def.decimals)} {def.unit}
+                          {s.avgNow(`${fmt(instant, def.decimals)} ${def.unit}`)}
                         </span>
                       )}
                     </span>
@@ -1009,7 +1114,7 @@ function OverviewPage({
                       {level && (
                         <span className="inline-flex items-center gap-1 font-medium text-white">
                           <LevelIcon level={level} />
-                          {LEVEL_META[level].label}
+                          {s.levels[level]}
                         </span>
                       )}
                     </span>
@@ -1023,47 +1128,42 @@ function OverviewPage({
 
       <PageContainer>
         {/* KPI-rivi nousee herosta */}
-        <section aria-label="Tunnusluvut" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 -mt-14 relative">
+        <section aria-label={s.kpiAria} className="grid grid-cols-1 sm:grid-cols-3 gap-4 -mt-14 relative">
           <KpiTile
             icon={<Droplet className="w-5 h-5" aria-hidden="true" />}
-            label={`${drinkingHorse} joi viimeisimpänä vuorokautena`}
+            label={s.kpiDrank(drinkingHorse)}
             value={fmt(latestWater?.total_liters, 1)}
             unit="l"
             foot={
               latestWater
-                ? `${diff >= 0 ? '+' : '−'}${fmt(Math.abs(diff), 1)} l keskiarvoon · ${latestWater.measurement_count} juomiskertaa`
-                : 'Ei mittauksia'
+                ? s.kpiDrankFoot(diff >= 0 ? '+' : '−', fmt(Math.abs(diff), 1), latestWater.measurement_count)
+                : s.noMeasurements
             }
           />
           <KpiTile
             icon={<Thermometer className="w-5 h-5" aria-hidden="true" />}
-            label="Tallin lämpötila"
+            label={s.kpiTemp}
             value={fmt(latestAir?.temperature, 1)}
             unit="°C"
             foot={<StatusChip level={levelFor(tempDef, latestAir?.temperature)} />}
           />
           <KpiTile
             icon={<Users className="w-5 h-5" aria-hidden="true" />}
-            label="Seurattavat hevoset"
+            label={s.kpiHorses}
             value={String(horses.length)}
             foot={horses.map((h) => h.name).join(', ') || '–'}
           />
-          <KpiTile
-            icon={<Video className="w-5 h-5" aria-hidden="true" />}
-            label="NFC-kuvaukset"
-            value={String(nfcCount)}
-            foot={`Jokaisesta leimauksesta ${clipSeconds} sekunnin videoleike`}
-          />
+
         </section>
 
         {/* Talli-ilma suosituksiin verrattuna */}
         <section className="mt-14" aria-labelledby="air-title">
           <div id="air-title">
             <SectionHeader
-              title="Talli-ilma suosituksiin verrattuna"
+              title={s.airSection}
               addon={<SourcesInfo />}
-              sub="Osoitin näyttää viimeisimmän mittauksen. Vihreä = hyvä, oranssi = rajalla, punainen = huono."
-              action={<MoreLink href={TAB_PATHS.environment}>Kaikki mittaukset</MoreLink>}
+              sub={s.airSectionSub}
+              action={<MoreLink href={TAB_PATHS.environment}>{s.allMeasurements}</MoreLink>}
             />
           </div>
           {latestAir ? (
@@ -1073,7 +1173,7 @@ function OverviewPage({
               ))}
             </div>
           ) : (
-            <div className={`${CARD} p-8 text-base text-[#6D6E71]`}>Talli-ilman mittauksia ei ole vielä saatavilla.</div>
+            <div className={`${CARD} p-8 text-base text-[#6D6E71]`}>{t().noAir}</div>
           )}
         </section>
 
@@ -1081,9 +1181,9 @@ function OverviewPage({
         <section className="mt-14 grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className={`${CARD} p-5 sm:p-7 lg:col-span-2`}>
             <SectionHeader
-              title={`${drinkingHorse}n juominen`}
-              sub={`Juoma-automaatin mittaama vesimäärä vuorokaudessa, ${waterDaily.length} viimeisintä vuorokautta`}
-              action={<MoreLink href={TAB_PATHS.water}>Juomaseuranta</MoreLink>}
+              title={s.waterSection(drinkingHorse)}
+              sub={s.waterSectionSub(waterDaily.length)}
+              action={<MoreLink href={TAB_PATHS.water}>{s.waterLink}</MoreLink>}
             />
             <div className="pt-8">
               <WaterChart waterDaily={waterDaily} avgWater={avgWater} />
@@ -1091,9 +1191,9 @@ function OverviewPage({
           </div>
 
           <div className={`${CARD} p-5 sm:p-7`}>
-            <SectionHeader title="Hevoset" action={<MoreLink href={TAB_PATHS.horses}>Kaikki</MoreLink>} />
+            <SectionHeader title={s.horses} action={<MoreLink href={TAB_PATHS.horses}>{s.all}</MoreLink>} />
             {horses.length === 0 ? (
-              <p className="text-base text-[#6D6E71]">Pilottiin ei ole vielä lisätty hevosia.</p>
+              <p className="text-base text-[#6D6E71]">{s.noHorses}</p>
             ) : (
               <ul className="divide-y divide-[#EDF0F4] -mx-2">
                 {horses.slice(0, 5).map((h) => (
@@ -1185,6 +1285,7 @@ function HorsesPage({
   const active = horses.find((h) => h.id === selectedId) ?? null;
   const shown = active ?? filteredHorses[0] ?? null;
   const listRef = useRef<HTMLUListElement>(null);
+  const s = t();
 
   // Nuolinäppäimet siirtävät valintaa listassa
   const onListKey = (e: React.KeyboardEvent<HTMLUListElement>) => {
@@ -1202,9 +1303,9 @@ function HorsesPage({
   return (
     <PageContainer>
       <div className="pt-10 pb-6">
-        <h1 className="font-display text-3xl sm:text-4xl font-semibold text-[#1B325E] tracking-tight">Hevoset</h1>
+        <h1 className="font-display text-3xl sm:text-4xl font-semibold text-[#1B325E] tracking-tight">{s.horses}</h1>
         <p className="text-base text-[#6D6E71] mt-2 max-w-[65ch]">
-          Pilotissa seurattavat hevoset, niiden liikeanalyysit ja tallin kirjaamat muistiinpanot.
+          {s.horsesIntro}
         </p>
       </div>
 
@@ -1213,7 +1314,7 @@ function HorsesPage({
         <div className={`${CARD} overflow-hidden ${active ? 'hidden lg:block' : ''}`}>
           <div className="p-4 border-b border-[#EDF0F4]">
             <label htmlFor="horse-search" className="block text-sm font-medium text-[#1B325E] mb-1.5">
-              Hae hevosta
+              {s.searchLabel}
             </label>
             <div className="relative">
               <Search className="w-4 h-4 text-[#6D6E71] absolute left-3 top-1/2 -translate-y-1/2" aria-hidden="true" />
@@ -1222,16 +1323,16 @@ function HorsesPage({
                 type="search"
                 value={search}
                 onChange={(e) => onSearch(e.target.value)}
-                placeholder="Nimi, rotu tai karsina"
+                placeholder={s.searchPlaceholder}
                 className="w-full min-h-11 pl-9 pr-3 border border-[#C3C9D3] rounded-xl text-base text-[#1B325E] placeholder:text-[#6D6E71] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1B325E]"
               />
             </div>
           </div>
           {filteredHorses.length === 0 ? (
             <div className="p-6 text-base text-[#6D6E71]">
-              Haulla “{search}” ei löytynyt hevosia.{' '}
+              {s.noSearchResults(search)}{' '}
               <button type="button" onClick={() => onSearch('')} className={`${LINK} min-h-11`}>
-                Tyhjennä haku
+                {s.clearSearch}
               </button>
             </div>
           ) : (
@@ -1251,7 +1352,7 @@ function HorsesPage({
                       <span className="flex-1 min-w-0">
                         <span className="block text-base font-medium text-[#1B325E]">{h.name}</span>
                         <span className="block text-sm text-[#6D6E71] truncate">
-                          {[h.breed, h.birth_year ? `s. ${h.birth_year}` : null].filter(Boolean).join(' · ')}
+                          {[h.breed, h.birth_year ? s.born(h.birth_year) : null].filter(Boolean).join(' · ')}
                         </span>
                       </span>
                       <span className="text-sm text-[#6D6E71] whitespace-nowrap">{h.stall_box}</span>
@@ -1268,11 +1369,11 @@ function HorsesPage({
         <div className={`space-y-6 ${active ? '' : 'hidden lg:block'}`}>
           {active && (
             <a href={TAB_PATHS.horses} className={`lg:hidden inline-flex items-center gap-2 min-h-11 ${LINK}`}>
-              <ArrowLeft className="w-4 h-4" aria-hidden="true" /> Kaikki hevoset
+              <ArrowLeft className="w-4 h-4" aria-hidden="true" /> {s.allHorses}
             </a>
           )}
           {shown ? <HorseDetail horse={shown} drinkingHorse={drinkingHorse} /> : (
-            <div className={`${CARD} p-8 text-base text-[#6D6E71]`}>Valitse hevonen listasta.</div>
+            <div className={`${CARD} p-8 text-base text-[#6D6E71]`}>{s.pickHorse}</div>
           )}
         </div>
       </div>
@@ -1281,11 +1382,11 @@ function HorsesPage({
 }
 
 function HorseDetail({ horse, drinkingHorse }: { horse: PublicHorse; drinkingHorse: string }) {
+  const s = t();
   const facts: { label: string; value: string }[] = [
-    { label: 'Rotu', value: horse.breed || '–' },
-    { label: 'Syntymävuosi', value: horse.birth_year ? String(horse.birth_year) : '–' },
-    { label: 'Karsina', value: horse.stall_box || '–' },
-    { label: 'NFC-riimutunniste', value: horse.has_nfc_tag ? 'Käytössä' : 'Ei käytössä' },
+    { label: s.factBreed, value: horse.breed || '–' },
+    { label: s.factBirth, value: horse.birth_year ? String(horse.birth_year) : '–' },
+    { label: s.factStall, value: horse.stall_box || '–' },
   ];
   return (
     <>
@@ -1296,12 +1397,12 @@ function HorseDetail({ horse, drinkingHorse }: { horse: PublicHorse; drinkingHor
             <h2 className="font-display text-3xl font-semibold text-[#1B325E] tracking-tight">{horse.name}</h2>
             {horse.name === drinkingHorse && (
               <p className="inline-flex items-center gap-1.5 text-sm text-[#135367] mt-1">
-                <Droplet className="w-4 h-4" aria-hidden="true" /> Juoma-automaatti seuraa juomista
+                <Droplet className="w-4 h-4" aria-hidden="true" /> {s.drinkerTracks}
               </p>
             )}
           </div>
         </div>
-        <dl className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6 pt-6 border-t border-[#EDF0F4]">
+        <dl className="grid grid-cols-2 sm:grid-cols-3 gap-4 mt-6 pt-6 border-t border-[#EDF0F4]">
           {facts.map((f) => (
             <div key={f.label}>
               <dt className="text-sm text-[#6D6E71]">{f.label}</dt>
@@ -1315,10 +1416,10 @@ function HorseDetail({ horse, drinkingHorse }: { horse: PublicHorse; drinkingHor
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className={`${CARD} p-6`}>
           <h3 className="font-display text-lg font-semibold text-[#1B325E]">
-            Liikeanalyysit <span className="text-[#6D6E71] font-normal tabular-nums">({horse.analyses.length})</span>
+            {s.analyses} <span className="text-[#6D6E71] font-normal tabular-nums">({horse.analyses.length})</span>
           </h3>
           {horse.analyses.length === 0 ? (
-            <p className="text-base text-[#6D6E71] mt-3">Hevoselle ei ole vielä tehty liikeanalyysiä.</p>
+            <p className="text-base text-[#6D6E71] mt-3">{s.noAnalyses}</p>
           ) : (
             <ul className="divide-y divide-[#EDF0F4] mt-2">
               {horse.analyses.map((a) => {
@@ -1346,18 +1447,18 @@ function HorseDetail({ horse, drinkingHorse }: { horse: PublicHorse; drinkingHor
 
         <div className={`${CARD} p-6`}>
           <h3 className="font-display text-lg font-semibold text-[#1B325E]">
-            Muistiinpanot <span className="text-[#6D6E71] font-normal tabular-nums">({horse.notes.length})</span>
+            {s.notes} <span className="text-[#6D6E71] font-normal tabular-nums">({horse.notes.length})</span>
           </h3>
           {horse.notes.length === 0 ? (
             <p className="text-base text-[#6D6E71] mt-3">
-              Ei julkisia muistiinpanoja. Talli kirjaa muistiinpanot omalla HummAPP-sovelluksellaan.
+              {s.noNotes}
             </p>
           ) : (
             <ul className="divide-y divide-[#EDF0F4] mt-2">
               {horse.notes.map((n) => (
                 <li key={n.id} className="py-4 space-y-1.5">
                   <p className="text-[15px] leading-relaxed">{n.content}</p>
-                  <p className="text-xs text-[#6D6E71] tabular-nums">Tallitiimi · {formatLocalTimestamp(n.created_at)}</p>
+                  <p className="text-xs text-[#6D6E71] tabular-nums">{s.stableTeam} · {formatLocalTimestamp(n.created_at)}</p>
                 </li>
               ))}
             </ul>
@@ -1387,20 +1488,21 @@ function WaterPage({
   latestWater: WaterDailySummary | undefined;
   updatedAt: string;
 }) {
+  const s = t();
   const totals = waterDaily.map((d) => d.total_liters);
   const stats = [
-    { label: 'Viimeisin vuorokausi', value: fmt(latestWater?.total_liters, 1) },
-    { label: 'Keskiarvo', value: fmt(avgWater, 1) },
-    { label: 'Enimmillään', value: totals.length ? fmt(Math.max(...totals), 1) : '–' },
-    { label: 'Vähimmillään', value: totals.length ? fmt(Math.min(...totals), 1) : '–' },
+    { label: s.statLatest, value: fmt(latestWater?.total_liters, 1) },
+    { label: s.statAvg, value: fmt(avgWater, 1) },
+    { label: s.statMax, value: totals.length ? fmt(Math.max(...totals), 1) : '–' },
+    { label: s.statMin, value: totals.length ? fmt(Math.min(...totals), 1) : '–' },
   ];
   return (
     <PageContainer>
       <div className="pt-10 pb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="font-display text-3xl sm:text-4xl font-semibold text-[#1B325E] tracking-tight">{drinkingHorse}n juominen</h1>
+          <h1 className="font-display text-3xl sm:text-4xl font-semibold text-[#1B325E] tracking-tight">{s.waterTitle(drinkingHorse)}</h1>
           <p className="text-base text-[#6D6E71] mt-2 max-w-[65ch]">
-            Juoma-automaatti mittaa jokaisen juomiskerran. Pilotissa automaatti on käytössä hevosella {drinkingHorse}.
+            {s.waterIntro(drinkingHorse)}
           </p>
         </div>
         <UpdatedLine updatedAt={updatedAt} />
@@ -1419,26 +1521,26 @@ function WaterPage({
       </div>
 
       <section className={`${CARD} p-5 sm:p-7 mt-6`}>
-        <SectionHeader title="Vesimäärä vuorokaudessa" />
+        <SectionHeader title={s.waterPerDay} />
         <div className="pt-8">
           <WaterChart waterDaily={waterDaily} avgWater={avgWater} height={280} />
         </div>
       </section>
 
       <section className="mt-6">
-        <SectionHeader title="Yksittäiset juomiskerrat" />
+        <SectionHeader title={s.singleDrinks} />
         <div className={`${CARD} overflow-x-auto`}>
           <table className="w-full text-left text-[15px]">
             <thead>
               <tr className="border-b border-[#E3E8EF] text-sm text-[#6D6E71]">
-                <th scope="col" className="py-3 px-5 font-medium">Aika</th>
-                <th scope="col" className="py-3 px-5 font-medium text-right">Määrä</th>
+                <th scope="col" className="py-3 px-5 font-medium">{s.colTime}</th>
+                <th scope="col" className="py-3 px-5 font-medium text-right">{s.colAmount}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#EDF0F4]">
               {waterList.length === 0 ? (
                 <tr>
-                  <td colSpan={2} className="py-6 px-5 text-[#6D6E71]">Ei kirjattuja juomiskertoja.</td>
+                  <td colSpan={2} className="py-6 px-5 text-[#6D6E71]">{s.noDrinks}</td>
                 </tr>
               ) : (
                 waterList.map((m) => (
@@ -1457,7 +1559,7 @@ function WaterPage({
 }
 
 // =====================================================================
-// 4. Talli-ilma ja kuvaukset (Detail / Record)
+// 4. Talli-ilma (Detail / Record)
 // =====================================================================
 
 function ValueCell({ def, value }: { def: MetricDef; value: number | null }) {
@@ -1468,49 +1570,29 @@ function ValueCell({ def, value }: { def: MetricDef; value: number | null }) {
       <span className="inline-flex items-center gap-1.5 justify-end" style={level ? { color: LEVEL_META[level].text } : undefined}>
         {level && <LevelIcon level={level} />}
         <span className="font-medium">{fmt(value, def.decimals)}</span>
-        <span className="sr-only">{level ? `, ${LEVEL_META[level].label}` : ''}</span>
+        <span className="sr-only">{level ? `, ${t().levels[level]}` : ''}</span>
       </span>
     </td>
   );
 }
 
-function EnvironmentPage({
-  airReadings,
-  nfcEvents,
-  clipBefore,
-  clipAfter,
-  canPlayVideo,
-  previewClip,
-  onPreview,
-  apiBase,
-  updatedAt,
-}: {
-  airReadings: StableAirMeasurement[];
-  nfcEvents: NfcEventItem[];
-  clipBefore: number;
-  clipAfter: number;
-  canPlayVideo: (ev: NfcEventItem) => boolean;
-  previewClip: NfcEventItem | null;
-  onPreview: (ev: NfcEventItem | null) => void;
-  apiBase: string;
-  updatedAt: string;
-}) {
+function EnvironmentPage({ airReadings, updatedAt }: { airReadings: StableAirMeasurement[]; updatedAt: string }) {
   const latest = airReadings[0] ?? null;
+  const s = t();
   return (
     <PageContainer>
       <div className="pt-10 pb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="font-display text-3xl sm:text-4xl font-semibold text-[#1B325E] tracking-tight">Talli-ilma ja kuvaukset</h1>
+          <h1 className="font-display text-3xl sm:text-4xl font-semibold text-[#1B325E] tracking-tight">{s.envTitle}</h1>
           <p className="text-base text-[#6D6E71] mt-2 max-w-[65ch]">
-            Anturit mittaavat lämpötilaa, kosteutta, ammoniakkia, hiilidioksidia ja pienhiukkasia. Arvot verrataan
-            hevostallien suositusrajoihin.
+            {s.envIntro}
           </p>
         </div>
         <UpdatedLine updatedAt={updatedAt} />
       </div>
 
       <section aria-labelledby="latest-air">
-        <h2 id="latest-air" className="sr-only">Viimeisin mittaus</h2>
+        <h2 id="latest-air" className="sr-only">{s.latestMeasurement}</h2>
         {latest ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             {METRICS.map((m) => (
@@ -1518,21 +1600,21 @@ function EnvironmentPage({
             ))}
           </div>
         ) : (
-          <div className={`${CARD} p-8 text-base text-[#6D6E71]`}>Talli-ilman mittauksia ei ole vielä saatavilla.</div>
+          <div className={`${CARD} p-8 text-base text-[#6D6E71]`}>{t().noAir}</div>
         )}
       </section>
 
       <section className="mt-10">
-        <SectionHeader title="Mittaukset sijainneittain" sub="Kuvake ja väri kertovat, onko arvo suositusrajojen sisällä. Pienhiukkasia ei luokitella yksittäisistä mittauksista, koska niiden ohjearvo on vuorokauden keskiarvo." />
+        <SectionHeader title={s.byLocation} sub={s.byLocationSub} />
         <div className={`${CARD} overflow-x-auto`}>
           <table className="w-full text-left text-[15px] min-w-[760px]">
             <thead>
               <tr className="border-b border-[#E3E8EF] text-sm text-[#6D6E71]">
-                <th scope="col" className="py-3 px-4 font-medium">Sijainti</th>
-                <th scope="col" className="py-3 px-4 font-medium">Aika</th>
+                <th scope="col" className="py-3 px-4 font-medium">{s.colLocation}</th>
+                <th scope="col" className="py-3 px-4 font-medium">{s.colTime}</th>
                 {METRICS.map((m) => (
                   <th key={m.key} scope="col" className="py-3 px-4 font-medium text-right whitespace-nowrap">
-                    {m.shortLabel} <span className="font-normal">{m.unit}</span>
+                    {metricText(m).short} <span className="font-normal">{m.unit}</span>
                   </th>
                 ))}
               </tr>
@@ -1540,7 +1622,7 @@ function EnvironmentPage({
             <tbody className="divide-y divide-[#EDF0F4]">
               {airReadings.slice(0, 12).map((a) => (
                 <tr key={a.id}>
-                  <td className="py-3 px-4 font-medium text-[#1B325E]">{a.location || a.sensor_id || 'Anturi'}</td>
+                  <td className="py-3 px-4 font-medium text-[#1B325E]">{a.location || a.sensor_id || s.sensor}</td>
                   <td className="py-3 px-4 tabular-nums whitespace-nowrap">{formatLocalTimestamp(a.measured_at)}</td>
                   {METRICS.map((m) => (
                     <ValueCell key={m.key} def={m} value={a[m.key] as number | null} />
@@ -1553,16 +1635,16 @@ function EnvironmentPage({
       </section>
 
       <section className="mt-10">
-        <SectionHeader title="Suositusrajat" addon={<SourcesInfo />} sub="Vihreä = suosituksen mukainen, oranssi = lähellä rajaa tai hieman yli, punainen = selvästi yli." />
+        <SectionHeader title={s.limits} addon={<SourcesInfo />} sub={s.limitsSub} />
         <div className={`${CARD} overflow-x-auto`}>
           <table className="w-full text-left text-[15px] min-w-[640px]">
             <thead>
               <tr className="border-b border-[#E3E8EF] text-sm text-[#6D6E71]">
-                <th scope="col" className="py-3 px-4 font-medium">Mittari</th>
+                <th scope="col" className="py-3 px-4 font-medium">{s.colMetric}</th>
                 {(['good', 'warn', 'bad'] as Level[]).map((l) => (
                   <th key={l} scope="col" className="py-3 px-4 font-medium">
                     <span className="inline-flex items-center gap-1.5" style={{ color: LEVEL_META[l].text }}>
-                      <LevelIcon level={l} /> {LEVEL_META[l].label}
+                      <LevelIcon level={l} /> {s.levels[l]}
                     </span>
                   </th>
                 ))}
@@ -1572,15 +1654,15 @@ function EnvironmentPage({
               {METRICS.map((m) => (
                 <tr key={m.key}>
                   <td className="py-3 px-4 font-medium text-[#1B325E] whitespace-nowrap">
-                    {m.label}
-                    {m.averaging === '24h' && <span className="block text-sm font-normal text-[#6D6E71]">vuorokauden keskiarvo</span>}
+                    {metricText(m).label}
+                    {m.averaging === '24h' && <span className="block text-sm font-normal text-[#6D6E71]">{s.dailyAvg}</span>}
                   </td>
                   {(['good', 'warn', 'bad'] as Level[]).map((l) => (
                     <td key={l} className="py-3 px-4 tabular-nums">
                       {m.bands
                         .filter((b) => b.level === l)
                         .map((b) => rangeText(m, b.from, b.to))
-                        .join(' tai ')}
+                        .join(s.or)}
                     </td>
                   ))}
                 </tr>
@@ -1590,92 +1672,12 @@ function EnvironmentPage({
         </div>
       </section>
 
-      <section className="mt-10">
-        <SectionHeader
-          title="NFC-kuvaukset"
-          sub={`Kun hevonen leimataan kuvausalueella, kamerasta tallentuu ${clipBefore + clipAfter} sekunnin leike (${clipBefore} s ennen ja ${clipAfter} s jälkeen). Leikkeet tarkastetaan tallin sovelluksessa.`}
-        />
-        <div className={`${CARD} overflow-x-auto`}>
-          <table className="w-full text-left text-[15px] min-w-[560px]">
-            <thead>
-              <tr className="border-b border-[#E3E8EF] text-sm text-[#6D6E71]">
-                <th scope="col" className="py-3 px-4 font-medium">Hevonen</th>
-                <th scope="col" className="py-3 px-4 font-medium">Aika</th>
-                <th scope="col" className="py-3 px-4 font-medium">Kuvausalue</th>
-                <th scope="col" className="py-3 px-4 font-medium">Leikkeen tila</th>
-                <th scope="col" className="py-3 px-4 font-medium text-right"><span className="sr-only">Toiminnot</span></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#EDF0F4]">
-              {nfcEvents.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="py-6 px-4 text-[#6D6E71]">Kuvauksia ei ole vielä tehty.</td>
-                </tr>
-              ) : (
-                nfcEvents.map((ev) => {
-                  const st = statusLabelFi(ev.video_clip_status || ev.status);
-                  return (
-                    <tr key={ev.id}>
-                      <td className="py-3 px-4 font-medium text-[#1B325E]">{ev.horse_name || 'Tuntematon'}</td>
-                      <td className="py-3 px-4 tabular-nums whitespace-nowrap">{formatLocalTimestamp(ev.phone_timestamp)}</td>
-                      <td className="py-3 px-4">{ev.location || '–'}</td>
-                      <td className="py-3 px-4">
-                        {st.level === 'neutral' ? (
-                          <span className="text-[#58595B]">{st.label}</span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1.5 font-medium" style={{ color: LEVEL_META[st.level].text }}>
-                            <LevelIcon level={st.level} /> {st.label}
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-2 px-4 text-right">
-                        {canPlayVideo(ev) && (
-                          <button
-                            type="button"
-                            onClick={() => onPreview(ev)}
-                            className="inline-flex items-center gap-2 min-h-11 px-4 rounded-xl bg-[#1B325E] text-white text-sm font-medium"
-                          >
-                            <Video className="w-4 h-4" aria-hidden="true" /> Katso leike
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {previewClip && previewClip.video_clip_id && (
-          <div className="mt-4 bg-[#1B325E] text-white p-5 rounded-2xl space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-base font-medium">
-                {previewClip.horse_name} · {formatLocalTimestamp(previewClip.phone_timestamp)}
-              </p>
-              <button
-                type="button"
-                onClick={() => onPreview(null)}
-                className="min-h-11 px-4 rounded-xl border border-white/25 text-sm font-medium hover:bg-white/10"
-              >
-                Sulje video
-              </button>
-            </div>
-            <video
-              key={previewClip.video_clip_id}
-              controls
-              className="w-full max-h-96 rounded-xl bg-black"
-              src={`${apiBase}/api/public/video-clips/${previewClip.video_clip_id}/stream`}
-            />
-          </div>
-        )}
-      </section>
     </PageContainer>
   );
 }
 
 function rangeText(m: MetricDef, from: number, to: number): string {
-  if (from <= m.scaleMin) return `alle ${fmt(to, 0)} ${m.unit}`;
-  if (to >= m.scaleMax) return `yli ${fmt(from, 0)} ${m.unit}`;
+  if (from <= m.scaleMin) return `${t().under} ${fmt(to, 0)} ${m.unit}`;
+  if (to >= m.scaleMax) return `${t().over} ${fmt(from, 0)} ${m.unit}`;
   return `${fmt(from, 0)}–${fmt(to, 0)} ${m.unit}`;
 }
