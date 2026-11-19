@@ -1,33 +1,65 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Calibri", "Carlito", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Franklin Gothic Demi", "Libre Franklin", "Calibri", sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  /* KASE-ohjeisto: pääfontti Calibri, otsikot Franklin Gothic. Verkossa käytetään Franklin-perheen
+     avointa versiota (Libre Franklin) koko käyttöliittymässä; painot 400 / 500 / 600. */
+  --font-sans: "Libre Franklin", "Franklin Gothic Book", Calibri, Carlito, ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Libre Franklin", "Franklin Gothic Demi", Calibri, sans-serif;
 
   --color-kase-navy: #1B325E;
   --color-kase-crimson: #C60651;
   --color-kase-gold: #FDBE4F;
-  --color-kase-gold-light: #FFDCA3;
   --color-kase-green: #00A34D;
   --color-kase-petrol: #135367;
   --color-kase-sky: #C0E1F0;
   --color-kase-orange: #F89628;
   --color-kase-brick: #A1342C;
-  --color-kase-gray-80: #58595B;
-  --color-kase-gray-70: #6D6E71;
-  --color-kase-gray-50: #939598;
 }
 
 @layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
   body {
     font-family: var(--font-sans);
-    color: #58595B;
-    background-color: #F8FAFC;
+    font-size: 1rem;
+    line-height: 1.55;
+    color: #4A4B4E;
+    background-color: #F4F6FA;
+    font-feature-settings: "tnum" 0;
   }
 
   h1, h2, h3, h4 {
     font-family: var(--font-display);
     color: #1B325E;
+    line-height: 1.15;
+  }
+
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+
+  :focus-visible {
+    outline: 2px solid #C60651;
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+  header :focus-visible,
+  footer :focus-visible,
+  .bg-\[\#1B325E\] :focus-visible {
+    outline-color: #FDBE4F;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
