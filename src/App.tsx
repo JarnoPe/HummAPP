@@ -673,9 +673,12 @@ function LoadingSkeleton() {
 }
 
 // --- Talli-ilman mittari: värivyöhykkeet + osoitin arvon kohdalla
-function RangeGauge({ def, value }: { def: MetricDef; value: number | null }) {
+function RangeGauge({ def, value, instant }: { def: MetricDef; value: number | null; instant?: number | null }) {
   const span = def.scaleMax - def.scaleMin;
-  const pos = value === null ? null : Math.max(0, Math.min(100, ((value - def.scaleMin) / span) * 100));
+  const toPos = (v: number | null | undefined) =>
+    v === null || v === undefined ? null : Math.max(0, Math.min(100, ((v - def.scaleMin) / span) * 100));
+  const pos = toPos(value);
+  const instantPos = toPos(instant);
   return (
     <div className="relative pt-3" aria-hidden="true">
       <div className="flex h-2.5 gap-[2px]">
@@ -687,6 +690,11 @@ function RangeGauge({ def, value }: { def: MetricDef; value: number | null }) {
           />
         ))}
       </div>
+      {instantPos !== null && (
+        <div className="absolute top-0 -translate-x-1/2" style={{ left: `${instantPos}%` }}>
+          <div className="w-3.5 h-3.5 mt-[2px] rounded-full bg-white border-2 border-[#1B325E]" />
+        </div>
+      )}
       {pos !== null && (
         <div className="absolute top-0 -translate-x-1/2" style={{ left: `${pos}%` }}>
           <div className="w-[5px] h-[22px] -mt-[2px] rounded-full bg-[#1B325E] ring-2 ring-white" />
@@ -706,6 +714,8 @@ interface MetricSummary {
   value: number | null;
   level: Level | null;
   avg?: { n: number; spanHours: number };
+  /** Viimeisin yksittäinen mittaus (näytetään 24 h -mittareille keskiarvon rinnalla) */
+  instant?: number | null;
 }
 
 function summarizeMetric(def: MetricDef, readings: StableAirMeasurement[]): MetricSummary {
@@ -725,21 +735,40 @@ function summarizeMetric(def: MetricDef, readings: StableAirMeasurement[]): Metr
   const value = values.reduce((a, b) => a + b, 0) / values.length;
   const times = window.map((r) => parseUtc(r.measured_at).getTime());
   const spanHours = (Math.max(...times) - Math.min(...times)) / 3600000;
-  return { value, level: levelFor(def, value), avg: { n: window.length, spanHours } };
+  return {
+    value,
+    level: levelFor(def, value),
+    avg: { n: window.length, spanHours },
+    instant: latest[def.key] as number | null,
+  };
 }
 
-function AvgNote({ avg }: { avg: NonNullable<MetricSummary['avg']> }) {
+function AvgNote({ def, avg, instant }: { def: MetricDef; avg: NonNullable<MetricSummary['avg']>; instant?: number | null }) {
   const partial = avg.spanHours < 18;
   return (
-    <p className="text-sm text-[#6D6E71] leading-snug">
-      Vuorokauden keskiarvo, {avg.n} {avg.n === 1 ? 'mittaus' : 'mittausta'}.
-      {partial && ' Mittauksia on alle vuorokauden ajalta, joten vertailu on suuntaa antava.'}
-    </p>
+    <div className="text-sm text-[#6D6E71] leading-snug space-y-2">
+      <ul className="space-y-1">
+        <li className="flex items-center gap-2">
+          <span className="w-[5px] h-3.5 rounded-full bg-[#1B325E] shrink-0" aria-hidden="true" />
+          Vuorokauden keskiarvo ({avg.n} {avg.n === 1 ? 'mittaus' : 'mittausta'})
+        </li>
+        <li className="flex items-center gap-2">
+          <span className="w-3 h-3 rounded-full bg-white border-2 border-[#1B325E] shrink-0" aria-hidden="true" />
+          <span>
+            Viimeisin mittaus{' '}
+            <span className="font-medium text-[#1B325E] tabular-nums">
+              {fmt(instant, def.decimals)} {def.unit}
+            </span>
+          </span>
+        </li>
+      </ul>
+      {partial && <p>Mittauksia on alle vuorokauden ajalta, joten keskiarvo on suuntaa antava.</p>}
+    </div>
   );
 }
 
 function AirMetricCard({ def, readings }: { def: MetricDef; readings: StableAirMeasurement[] }) {
-  const { value, level, avg } = summarizeMetric(def, readings);
+  const { value, level, avg, instant } = summarizeMetric(def, readings);
   return (
     <div className={`${CARD} p-5 flex flex-col gap-3`}>
       <div className="flex items-start justify-between gap-3">
@@ -750,8 +779,8 @@ function AirMetricCard({ def, readings }: { def: MetricDef; readings: StableAirM
         {fmt(value, def.decimals)}
         <span className="ml-1.5 text-base font-normal text-[#6D6E71]">{def.unit}</span>
       </p>
-      <RangeGauge def={def} value={value} />
-      {avg && <AvgNote avg={avg} />}
+      <RangeGauge def={def} value={value} instant={avg ? instant : undefined} />
+      {avg && <AvgNote def={def} avg={avg} instant={instant} />}
       <p className="text-sm text-[#6D6E71] leading-snug">{def.guide}</p>
     </div>
   );
@@ -965,11 +994,15 @@ function OverviewPage({
                 ))}
               </div>
               <ul className="mt-5 divide-y divide-white/10">
-                {levels.map(({ def, level, value, avg }) => (
+                {levels.map(({ def, level, value, avg, instant }) => (
                   <li key={def.key} className="flex items-center justify-between gap-3 py-2.5 text-[15px]">
                     <span className="text-white">
                       {def.label}
-                      {avg && <span className="block text-sm text-[#C0E1F0]">vuorokauden keskiarvo</span>}
+                      {avg && (
+                        <span className="block text-sm text-[#C0E1F0] tabular-nums">
+                          vrk:n keskiarvo · nyt {fmt(instant, def.decimals)} {def.unit}
+                        </span>
+                      )}
                     </span>
                     <span className="inline-flex items-center gap-2 text-[#DCEEF6] tabular-nums">
                       {fmt(value, def.decimals)} {def.unit}
