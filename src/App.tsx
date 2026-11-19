@@ -482,7 +482,7 @@ export default function App() {
             <p className="text-sm text-[#9FC3D6]">Yhteystiedot</p>
             {[
               { n: 'Jarno Peltola', r: 'Projektipäällikkö, Kaustisen seutukunta', e: 'jarno.peltola@kaustisenseutukunta.fi' },
-              { n: 'Essi Wallenius', r: 'Projektikoordinaattori, Kpedu', e: 'essi.wallenius@kpedu.fi' },
+              { n: 'Marika Kuutti', r: 'Projektikoordinaattori, Kpedu', e: 'marika.kuutti@kpedu.fi' },
             ].map((c) => (
               <div key={c.e} className="text-[15px]">
                 <p className="text-white font-medium">{c.n}</p>
