@@ -22,8 +22,7 @@
           "summary": "Symmetrinen ja puhdas ravi molempiin suuntiin, ei ontumishavaintoja.",
           "status": "APPROVED"
         }
-      ],
-      "has_nfc_tag": true
+      ]
     },
     {
       "id": 2,
@@ -35,8 +34,7 @@
       "active": true,
       "created_at": "2026-11-01T08:00:00Z",
       "notes": [],
-      "analyses": [],
-      "has_nfc_tag": true
+      "analyses": []
     },
     {
       "id": 3,
@@ -48,8 +46,7 @@
       "active": true,
       "created_at": "2026-11-01T08:00:00Z",
       "notes": [],
-      "analyses": [],
-      "has_nfc_tag": true
+      "analyses": []
     }
   ],
   "water_daily": [
@@ -122,30 +119,5 @@
       "co2": 880,
       "particulate_matter": 22.1
     }
-  ],
-  "nfc_events": [
-    {
-      "id": 1,
-      "horse_id": 1,
-      "horse_name": "Antero",
-      "phone_timestamp": "2026-11-13T05:10:00Z",
-      "location": "kuvausalue-1",
-      "status": "APPROVED",
-      "video_clip_id": 1,
-      "video_clip_status": "APPROVED"
-    },
-    {
-      "id": 2,
-      "horse_id": 2,
-      "horse_name": "Valo",
-      "phone_timestamp": "2026-11-13T06:10:00Z",
-      "location": "kuvausalue-1",
-      "status": "READY",
-      "video_clip_id": 2,
-      "video_clip_status": "READY"
-    }
-  ],
-  "clip_seconds_before": 5,
-  "clip_seconds_after": 13,
-  "public_video_enabled": false
+  ]
 }

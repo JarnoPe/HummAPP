@@ -32,7 +32,7 @@ const fi = {
   heroEyebrow: 'Kaustisen seutukunnan hevostallipilotti',
   heroTitle: 'Miten tallin hevoset voivat?',
   heroText:
-    'HummAPP kokoaa tallin anturien, juoma-automaatin ja NFC-kuvausten tiedot yhteen. Näet yhdellä silmäyksellä, juovatko hevoset normaalisti ja onko talli-ilma suositusten mukaista.',
+    'HummAPP kokoaa tallin anturien ja juoma-automaatin tiedot yhteen. Näet yhdellä silmäyksellä, juovatko hevoset normaalisti ja onko talli-ilma suositusten mukaista.',
   airHeadlineBad: 'Talli-ilmassa on korjattavaa',
   airHeadlineGood: 'Talli-ilma on suositusten mukainen',
   airHeadlineMostly: 'Talli-ilma on pääosin hyvä',
@@ -45,8 +45,6 @@ const fi = {
   noMeasurements: 'Ei mittauksia',
   kpiTemp: 'Tallin lämpötila',
   kpiHorses: 'Seurattavat hevoset',
-  kpiNfc: 'NFC-kuvaukset',
-  kpiNfcFoot: (s: number) => `Jokaisesta leimauksesta ${s} sekunnin videoleike`,
   airSection: 'Talli-ilma suosituksiin verrattuna',
   airSectionSub: 'Osoitin näyttää viimeisimmän mittauksen. Vihreä = hyvä, oranssi = rajalla, punainen = huono.',
   allMeasurements: 'Kaikki mittaukset',
@@ -95,9 +93,6 @@ const fi = {
   factBreed: 'Rotu',
   factBirth: 'Syntymävuosi',
   factStall: 'Karsina',
-  factNfc: 'NFC-riimutunniste',
-  inUse: 'Käytössä',
-  notInUse: 'Ei käytössä',
   drinkerTracks: 'Juoma-automaatti seuraa juomista',
   analyses: 'Liikeanalyysit',
   noAnalyses: 'Hevoselle ei ole vielä tehty liikeanalyysiä.',
@@ -117,7 +112,7 @@ const fi = {
   colAmount: 'Määrä',
   noDrinks: 'Ei kirjattuja juomiskertoja.',
 
-  envTitle: 'Talli-ilma ja kuvaukset',
+  envTitle: 'Talli-ilma',
   envIntro:
     'Anturit mittaavat lämpötilaa, kosteutta, ammoniakkia, hiilidioksidia ja pienhiukkasia. Arvoja verrataan hevostallien suositusrajoihin.',
   byLocation: 'Mittaukset sijainneittain',
@@ -132,17 +127,6 @@ const fi = {
   or: ' tai ',
   under: 'alle',
   over: 'yli',
-  nfcTitle: 'NFC-kuvaukset',
-  nfcSub: (all: number, b: number, a: number) =>
-    `Kun hevonen leimataan kuvausalueella, kamerasta tallentuu ${all} sekunnin leike (${b} s ennen ja ${a} s jälkeen). Leikkeet tarkastetaan tallin sovelluksessa.`,
-  colHorse: 'Hevonen',
-  colArea: 'Kuvausalue',
-  colClip: 'Leikkeen tila',
-  colActions: 'Toiminnot',
-  noNfc: 'Kuvauksia ei ole vielä tehty.',
-  unknown: 'Tuntematon',
-  watchClip: 'Katso leike',
-  closeVideo: 'Sulje video',
   status: {
     APPROVED: 'Hyväksytty',
     READY: 'Valmis tarkastettavaksi',
@@ -190,7 +174,7 @@ const fi = {
 
   docTitle: 'HummAPP · hummapp.fi | Kaustisen seutukunnan hevosten hyvinvointipilotti',
   docDescription:
-    'Euroopan unionin osarahoittama Kaustisen seutukunnan HummAPP-pilotti: hevosten juominen, talli-ilman laatu suositusrajoihin verrattuna ja NFC-kuvaukset yhdellä sivulla.',
+    'Euroopan unionin osarahoittama Kaustisen seutukunnan HummAPP-pilotti: hevosten juominen ja talli-ilman laatu suositusrajoihin verrattuna yhdellä sivulla.',
 };
 
 export type Strings = typeof fi;
@@ -215,7 +199,7 @@ const en: Strings = {
   heroEyebrow: 'Horse stable pilot in the Kaustinen sub-region',
   heroTitle: 'How are the horses in the stable doing?',
   heroText:
-    'HummAPP brings together data from the stable’s sensors, the automatic drinker and NFC recordings. At a glance you can see whether the horses are drinking normally and whether the stable air meets the recommendations.',
+    'HummAPP brings together data from the stable’s sensors and the automatic drinker. At a glance you can see whether the horses are drinking normally and whether the stable air meets the recommendations.',
   airHeadlineBad: 'The stable air needs attention',
   airHeadlineGood: 'The stable air meets the recommendations',
   airHeadlineMostly: 'The stable air is mostly good',
@@ -228,8 +212,6 @@ const en: Strings = {
   noMeasurements: 'No measurements',
   kpiTemp: 'Stable temperature',
   kpiHorses: 'Horses monitored',
-  kpiNfc: 'NFC recordings',
-  kpiNfcFoot: (s: number) => `Every tag scan saves a video clip of ${s} seconds`,
   airSection: 'Stable air compared with recommendations',
   airSectionSub: 'The marker shows the latest measurement. Green = good, orange = borderline, red = poor.',
   allMeasurements: 'All measurements',
@@ -278,9 +260,6 @@ const en: Strings = {
   factBreed: 'Breed',
   factBirth: 'Year of birth',
   factStall: 'Stall',
-  factNfc: 'NFC halter tag',
-  inUse: 'In use',
-  notInUse: 'Not in use',
   drinkerTracks: 'Drinking is tracked by the automatic drinker',
   analyses: 'Movement analyses',
   noAnalyses: 'No movement analysis has been done for this horse yet.',
@@ -300,7 +279,7 @@ const en: Strings = {
   colAmount: 'Amount',
   noDrinks: 'No drinks recorded.',
 
-  envTitle: 'Stable air and recordings',
+  envTitle: 'Stable air',
   envIntro:
     'Sensors measure temperature, humidity, ammonia, carbon dioxide and fine particles. The values are compared with recommended limits for horse stables.',
   byLocation: 'Measurements by location',
@@ -315,17 +294,6 @@ const en: Strings = {
   or: ' or ',
   under: 'under',
   over: 'over',
-  nfcTitle: 'NFC recordings',
-  nfcSub: (all: number, b: number, a: number) =>
-    `When a horse’s tag is scanned in the recording area, the camera saves a clip of ${all} seconds (${b} s before and ${a} s after). Clips are reviewed in the stable’s app.`,
-  colHorse: 'Horse',
-  colArea: 'Recording area',
-  colClip: 'Clip status',
-  colActions: 'Actions',
-  noNfc: 'No recordings yet.',
-  unknown: 'Unknown',
-  watchClip: 'Watch clip',
-  closeVideo: 'Close video',
   status: {
     APPROVED: 'Approved',
     READY: 'Ready for review',
@@ -376,7 +344,7 @@ const en: Strings = {
 
   docTitle: 'HummAPP · hummapp.fi | Horse welfare pilot in the Kaustinen sub-region',
   docDescription:
-    'HummAPP pilot in the Kaustinen sub-region, co-funded by the European Union: horses’ drinking, stable air quality compared with recommended limits and NFC recordings on one page.',
+    'HummAPP pilot in the Kaustinen sub-region, co-funded by the European Union: horses’ drinking and stable air quality compared with recommended limits on one page.',
 };
 
 const STRINGS: Record<Lang, Strings> = { fi, en };

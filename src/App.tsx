@@ -2,7 +2,6 @@ import React, { useEffect, useState, useCallback, useMemo, useRef, useId } from 
 import {
   Droplet,
   Thermometer,
-  Video,
   Search,
   RefreshCw,
   Clock,
@@ -54,7 +53,7 @@ interface PublicHorse {
   stall_box: string | null;
   description: string | null;
   created_at: string;
-  has_nfc_tag: boolean;
+  has_nfc_tag?: boolean;
   notes: HorseNote[];
   analyses: MovementAnalysis[];
 }
@@ -83,29 +82,14 @@ interface StableAirMeasurement {
   particulate_matter: number | null;
 }
 
-interface NfcEventItem {
-  id: number;
-  horse_id: number | null;
-  horse_name: string | null;
-  phone_timestamp: string;
-  location: string | null;
-  status: string;
-  video_clip_id: number | null;
-  video_clip_status: string | null;
-}
-
 interface PublicOverview {
   read_only: boolean;
   generated_at: string;
   drinking_horse_name: string;
-  clip_seconds_before?: number;
-  clip_seconds_after?: number;
-  public_video_enabled?: boolean;
   horses: PublicHorse[];
   water_daily: WaterDailySummary[];
   water_measurements: WaterMeasurement[];
   air_readings: StableAirMeasurement[];
-  nfc_events: NfcEventItem[];
 }
 
 type PublicTab = 'overview' | 'horses' | 'water' | 'environment';
@@ -259,7 +243,6 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [horseSearch, setHorseSearch] = useState('');
-  const [previewClip, setPreviewClip] = useState<NfcEventItem | null>(null);
 
   const apiBase = useMemo(() => {
     const raw = window.HUMMAPP_PUBLIC_CONFIG?.apiBaseUrl?.trim() || '';
@@ -304,11 +287,8 @@ export default function App() {
   const waterDaily = data?.water_daily ?? [];
   const waterList = data?.water_measurements ?? [];
   const airReadings = data?.air_readings ?? [];
-  const nfcEvents = data?.nfc_events ?? [];
   const latestAir = airReadings[0] ?? null;
   const drinkingHorse = data?.drinking_horse_name || 'Antero';
-  const clipBefore = data?.clip_seconds_before ?? 5;
-  const clipAfter = data?.clip_seconds_after ?? 13;
 
   const latestWater = waterDaily[waterDaily.length - 1];
   const avgWater = waterDaily.length
@@ -432,8 +412,6 @@ export default function App() {
                 avgWater={avgWater}
                 drinkingHorse={drinkingHorse}
                 horses={horses}
-                nfcCount={nfcEvents.length}
-                clipSeconds={clipBefore + clipAfter}
               />
             )}
 
@@ -460,24 +438,7 @@ export default function App() {
             )}
 
             {activeTab === 'environment' && (
-              <EnvironmentPage
-                airReadings={airReadings}
-                nfcEvents={nfcEvents}
-                clipBefore={clipBefore}
-                clipAfter={clipAfter}
-                canPlayVideo={(ev) =>
-                  Boolean(
-                    ev.video_clip_id &&
-                      dataSourceMode === 'live' &&
-                      data?.public_video_enabled === true &&
-                      (ev.video_clip_status === 'READY' || ev.video_clip_status === 'APPROVED')
-                  )
-                }
-                previewClip={previewClip}
-                onPreview={setPreviewClip}
-                apiBase={apiBase}
-                updatedAt={updatedAt}
-              />
+              <EnvironmentPage airReadings={airReadings} updatedAt={updatedAt} />
             )}
           </>
         )}
@@ -1059,8 +1020,6 @@ function OverviewPage({
   avgWater,
   drinkingHorse,
   horses,
-  nfcCount,
-  clipSeconds,
 }: {
   updatedAt: string;
   live: boolean;
@@ -1072,8 +1031,6 @@ function OverviewPage({
   avgWater: number;
   drinkingHorse: string;
   horses: PublicHorse[];
-  nfcCount: number;
-  clipSeconds: number;
 }) {
   const levels = METRICS.map((m) => ({ def: m, ...summarizeMetric(m, airReadings) }));
   const goodCount = levels.filter((l) => l.level === 'good').length;
@@ -1171,7 +1128,7 @@ function OverviewPage({
 
       <PageContainer>
         {/* KPI-rivi nousee herosta */}
-        <section aria-label={s.kpiAria} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 -mt-14 relative">
+        <section aria-label={s.kpiAria} className="grid grid-cols-1 sm:grid-cols-3 gap-4 -mt-14 relative">
           <KpiTile
             icon={<Droplet className="w-5 h-5" aria-hidden="true" />}
             label={s.kpiDrank(drinkingHorse)}
@@ -1196,12 +1153,7 @@ function OverviewPage({
             value={String(horses.length)}
             foot={horses.map((h) => h.name).join(', ') || '–'}
           />
-          <KpiTile
-            icon={<Video className="w-5 h-5" aria-hidden="true" />}
-            label={s.kpiNfc}
-            value={String(nfcCount)}
-            foot={s.kpiNfcFoot(clipSeconds)}
-          />
+
         </section>
 
         {/* Talli-ilma suosituksiin verrattuna */}
@@ -1435,7 +1387,6 @@ function HorseDetail({ horse, drinkingHorse }: { horse: PublicHorse; drinkingHor
     { label: s.factBreed, value: horse.breed || '–' },
     { label: s.factBirth, value: horse.birth_year ? String(horse.birth_year) : '–' },
     { label: s.factStall, value: horse.stall_box || '–' },
-    { label: s.factNfc, value: horse.has_nfc_tag ? s.inUse : s.notInUse },
   ];
   return (
     <>
@@ -1451,7 +1402,7 @@ function HorseDetail({ horse, drinkingHorse }: { horse: PublicHorse; drinkingHor
             )}
           </div>
         </div>
-        <dl className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6 pt-6 border-t border-[#EDF0F4]">
+        <dl className="grid grid-cols-2 sm:grid-cols-3 gap-4 mt-6 pt-6 border-t border-[#EDF0F4]">
           {facts.map((f) => (
             <div key={f.label}>
               <dt className="text-sm text-[#6D6E71]">{f.label}</dt>
@@ -1608,7 +1559,7 @@ function WaterPage({
 }
 
 // =====================================================================
-// 4. Talli-ilma ja kuvaukset (Detail / Record)
+// 4. Talli-ilma (Detail / Record)
 // =====================================================================
 
 function ValueCell({ def, value }: { def: MetricDef; value: number | null }) {
@@ -1625,27 +1576,7 @@ function ValueCell({ def, value }: { def: MetricDef; value: number | null }) {
   );
 }
 
-function EnvironmentPage({
-  airReadings,
-  nfcEvents,
-  clipBefore,
-  clipAfter,
-  canPlayVideo,
-  previewClip,
-  onPreview,
-  apiBase,
-  updatedAt,
-}: {
-  airReadings: StableAirMeasurement[];
-  nfcEvents: NfcEventItem[];
-  clipBefore: number;
-  clipAfter: number;
-  canPlayVideo: (ev: NfcEventItem) => boolean;
-  previewClip: NfcEventItem | null;
-  onPreview: (ev: NfcEventItem | null) => void;
-  apiBase: string;
-  updatedAt: string;
-}) {
+function EnvironmentPage({ airReadings, updatedAt }: { airReadings: StableAirMeasurement[]; updatedAt: string }) {
   const latest = airReadings[0] ?? null;
   const s = t();
   return (
@@ -1741,86 +1672,6 @@ function EnvironmentPage({
         </div>
       </section>
 
-      <section className="mt-10">
-        <SectionHeader
-          title={s.nfcTitle}
-          sub={s.nfcSub(clipBefore + clipAfter, clipBefore, clipAfter)}
-        />
-        <div className={`${CARD} overflow-x-auto`}>
-          <table className="w-full text-left text-[15px] min-w-[560px]">
-            <thead>
-              <tr className="border-b border-[#E3E8EF] text-sm text-[#6D6E71]">
-                <th scope="col" className="py-3 px-4 font-medium">{s.colHorse}</th>
-                <th scope="col" className="py-3 px-4 font-medium">{s.colTime}</th>
-                <th scope="col" className="py-3 px-4 font-medium">{s.colArea}</th>
-                <th scope="col" className="py-3 px-4 font-medium">{s.colClip}</th>
-                <th scope="col" className="py-3 px-4 font-medium text-right"><span className="sr-only">{s.colActions}</span></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#EDF0F4]">
-              {nfcEvents.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="py-6 px-4 text-[#6D6E71]">{s.noNfc}</td>
-                </tr>
-              ) : (
-                nfcEvents.map((ev) => {
-                  const st = statusLabelFi(ev.video_clip_status || ev.status);
-                  return (
-                    <tr key={ev.id}>
-                      <td className="py-3 px-4 font-medium text-[#1B325E]">{ev.horse_name || s.unknown}</td>
-                      <td className="py-3 px-4 tabular-nums whitespace-nowrap">{formatLocalTimestamp(ev.phone_timestamp)}</td>
-                      <td className="py-3 px-4">{ev.location || '–'}</td>
-                      <td className="py-3 px-4">
-                        {st.level === 'neutral' ? (
-                          <span className="text-[#58595B]">{st.label}</span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1.5 font-medium" style={{ color: LEVEL_META[st.level].text }}>
-                            <LevelIcon level={st.level} /> {st.label}
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-2 px-4 text-right">
-                        {canPlayVideo(ev) && (
-                          <button
-                            type="button"
-                            onClick={() => onPreview(ev)}
-                            className="inline-flex items-center gap-2 min-h-11 px-4 rounded-xl bg-[#1B325E] text-white text-sm font-medium"
-                          >
-                            <Video className="w-4 h-4" aria-hidden="true" /> {s.watchClip}
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {previewClip && previewClip.video_clip_id && (
-          <div className="mt-4 bg-[#1B325E] text-white p-5 rounded-2xl space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-base font-medium">
-                {previewClip.horse_name} · {formatLocalTimestamp(previewClip.phone_timestamp)}
-              </p>
-              <button
-                type="button"
-                onClick={() => onPreview(null)}
-                className="min-h-11 px-4 rounded-xl border border-white/25 text-sm font-medium hover:bg-white/10"
-              >
-                {s.closeVideo}
-              </button>
-            </div>
-            <video
-              key={previewClip.video_clip_id}
-              controls
-              className="w-full max-h-96 rounded-xl bg-black"
-              src={`${apiBase}/api/public/video-clips/${previewClip.video_clip_id}/stream`}
-            />
-          </div>
-        )}
-      </section>
     </PageContainer>
   );
 }
