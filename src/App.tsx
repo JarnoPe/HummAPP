@@ -13,8 +13,11 @@ import {
   ArrowLeft,
   ArrowRight,
   Users,
+  Info,
+  Mail,
+  ExternalLink,
 } from 'lucide-react';
-import { METRICS, SOURCES, LEVEL_META, levelFor, type Level, type MetricDef } from './thresholds';
+import { METRICS, SOURCES, FINNISH_LAW, LEVEL_META, levelFor, type Level, type MetricDef } from './thresholds';
 
 declare global {
   interface Window {
@@ -442,28 +445,54 @@ export default function App() {
         )}
       </main>
 
-      <footer className="bg-[#1B325E] text-[#C0E1F0] mt-16">
-        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-10 grid gap-8 md:grid-cols-[1fr_1.4fr]">
-          <div className="space-y-2">
-            <p className="font-display text-lg font-semibold text-white">
-              Humm<span className="text-[#FDBE4F]">APP</span>-pilotti
+      <footer className="bg-[#1B325E] text-[#C0E1F0] mt-16" aria-labelledby="project-title">
+        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-12 grid gap-10 md:grid-cols-[1.3fr_1fr_1fr]">
+          <div className="space-y-3">
+            <p className="text-sm font-medium text-[#FDBE4F]">Hanke</p>
+            <h2 id="project-title" className="font-display text-2xl font-semibold text-white">KP AlkIoT</h2>
+            <p className="text-[15px] leading-relaxed max-w-[52ch]">
+              HummAPP on osa KP AlkIoT -hanketta, joka parantaa hevosten hyvinvointia Keski-Pohjanmaalla. Hankkeessa
+              kehitetään ja pilotoidaan IoT-ratkaisuja, joilla hevosten hyvinvointia voi seurata reaaliajassa.
             </p>
-            <p className="text-sm leading-relaxed max-w-[48ch]">
-              Kaustisen seutukunnan hevostallipilotti, jota Euroopan unioni osarahoittaa. Tietoja muokataan vain
-              tallin omassa sovelluksessa.
-            </p>
+            <a
+              href="https://hevostenhyvinvointi.fi/kpalkiot-hankekuvaus/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 min-h-11 text-[15px] font-medium text-white underline underline-offset-4 decoration-white/30 hover:decoration-white"
+            >
+              Lue hankekuvaus <ExternalLink className="w-4 h-4" aria-hidden="true" />
+            </a>
           </div>
-          <div className="space-y-2">
-            <p className="text-sm font-semibold text-white">Talli-ilman suositusrajojen lähteet</p>
-            <ul className="text-sm">
-              {SOURCES.map((s) => (
-                <li key={s.url}>
-                  <a href={s.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center min-h-11 hover:text-white underline underline-offset-4 decoration-white/30">
-                    {s.title}
-                  </a>
-                </li>
-              ))}
-            </ul>
+
+          <dl className="grid gap-4 text-[15px] content-start">
+            {[
+              { t: 'Toteuttajat', d: 'Kaustisen seutukunta ja Kpedu (EIP-yhteistyöhanke)' },
+              { t: 'Rahoittaja', d: 'Pohjanmaan ELY-keskus, Euroopan maaseuturahasto' },
+              { t: 'Toteutusaika', d: '1.1.2025–31.12.2026' },
+              { t: 'Kohderyhmä', d: 'Keski-Pohjanmaan hevostilat, eläinlääkärit ja ohjelmistoyritykset' },
+            ].map((r) => (
+              <div key={r.t}>
+                <dt className="text-sm text-[#9FC3D6]">{r.t}</dt>
+                <dd className="text-white">{r.d}</dd>
+              </div>
+            ))}
+          </dl>
+
+          <div className="space-y-3">
+            <p className="text-sm text-[#9FC3D6]">Yhteystiedot</p>
+            {[
+              { n: 'Jarno Peltola', r: 'Projektipäällikkö, Kaustisen seutukunta', e: 'jarno.peltola@kaustisenseutukunta.fi' },
+              { n: 'Essi Wallenius', r: 'Projektikoordinaattori, Kpedu', e: 'essi.wallenius@kpedu.fi' },
+            ].map((c) => (
+              <div key={c.e} className="text-[15px]">
+                <p className="text-white font-medium">{c.n}</p>
+                <p>{c.r}</p>
+                <a href={`mailto:${c.e}`} className="inline-flex items-center gap-1.5 min-h-11 underline underline-offset-4 decoration-white/30 hover:text-white break-all">
+                  <Mail className="w-4 h-4 shrink-0" aria-hidden="true" />
+                  {c.e}
+                </a>
+              </div>
+            ))}
           </div>
         </div>
       </footer>
@@ -509,15 +538,112 @@ function UpdatedLine({ updatedAt, dark = false }: { updatedAt: string; dark?: bo
   );
 }
 
-function SectionHeader({ title, sub, action }: { title: string; sub?: string; action?: React.ReactNode }) {
+function SectionHeader({
+  title,
+  sub,
+  action,
+  addon,
+}: {
+  title: string;
+  sub?: string;
+  action?: React.ReactNode;
+  addon?: React.ReactNode;
+}) {
   return (
     <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2 mb-4">
       <div>
-        <h2 className="font-display text-xl sm:text-2xl font-semibold text-[#1B325E] tracking-tight">{title}</h2>
+        <div className="flex items-center gap-1">
+          <h2 className="font-display text-xl sm:text-2xl font-semibold text-[#1B325E] tracking-tight">{title}</h2>
+          {addon}
+        </div>
         {sub && <p className="text-sm text-[#6D6E71] mt-1">{sub}</p>}
       </div>
       {action}
     </div>
+  );
+}
+
+// i-ikoni: lähteet näkyvät, kun osoitin viedään päälle. Toimii myös napautuksella ja näppäimistöllä.
+function SourcesInfo() {
+  const [open, setOpen] = useState(false);
+  const [shift, setShift] = useState(0);
+  const wrapRef = useRef<HTMLSpanElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+  const id = 'sources-popover';
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    const onDown = (e: PointerEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('pointerdown', onDown);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('pointerdown', onDown);
+    };
+  }, [open]);
+
+  // Pidetään ikkuna näytön sisällä kapeallakin näytöllä
+  useEffect(() => {
+    if (!open || !popRef.current) return;
+    const r = popRef.current.getBoundingClientRect();
+    const overflow = r.right - (window.innerWidth - 16);
+    setShift(overflow > 0 ? -overflow : 0);
+  }, [open]);
+
+  return (
+    <span
+      ref={wrapRef}
+      className="relative inline-flex"
+      onPointerEnter={(e) => e.pointerType === 'mouse' && setOpen(true)}
+      onPointerLeave={(e) => e.pointerType === 'mouse' && setOpen(false)}
+    >
+      <button
+        type="button"
+        aria-label="Suositusrajojen lähteet"
+        aria-expanded={open}
+        aria-controls={id}
+        onClick={() => setOpen((v) => !v)}
+        className="grid place-items-center w-11 h-11 rounded-full text-[#6D6E71] hover:text-[#1B325E]"
+      >
+        <Info className="w-5 h-5" aria-hidden="true" />
+      </button>
+      {open && (
+        <div
+          ref={popRef}
+          id={id}
+          role="dialog"
+          aria-label="Suositusrajojen lähteet"
+          className="absolute left-0 top-full z-30 pt-1"
+          style={{ transform: `translateX(${shift}px)` }}
+        >
+          <div className="w-[320px] max-w-[calc(100vw-2rem)] rounded-xl border border-[#E3E8EF] bg-white p-4 shadow-[0_8px_24px_rgba(16,24,40,0.08)] text-sm">
+            <p className="font-medium text-[#1B325E]">Mistä rajat tulevat?</p>
+            <ul className="mt-2 divide-y divide-[#EDF0F4]">
+              {SOURCES.map((src) => (
+                <li key={src.url} className="py-2">
+                  <a href={src.url} target="_blank" rel="noopener noreferrer" className={`${LINK} inline-flex items-start gap-1`}>
+                    {src.title}
+                    <ExternalLink className="w-3.5 h-3.5 mt-[3px] shrink-0" aria-hidden="true" />
+                  </a>
+                  <span className="block text-[#6D6E71]">{src.note}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 text-[#6D6E71] leading-snug">
+              Suomen{' '}
+              <a href={FINNISH_LAW.url} target="_blank" rel="noopener noreferrer" className={LINK}>
+                hevosasetus
+              </a>{' '}
+              ei anna lukuarvoja. Vihreä noudattaa lähteiden suositusta; keltaisen ja punaisen rajat ovat HummAPPin
+              tulkinta.
+            </p>
+          </div>
+        </div>
+      )}
+    </span>
   );
 }
 
@@ -858,6 +984,7 @@ function OverviewPage({
           <div id="air-title">
             <SectionHeader
               title="Talli-ilma suosituksiin verrattuna"
+              addon={<SourcesInfo />}
               sub="Osoitin näyttää viimeisimmän mittauksen. Vihreä = hyvä, oranssi = rajalla, punainen = huono."
               action={<MoreLink href={TAB_PATHS.environment}>Kaikki mittaukset</MoreLink>}
             />
@@ -1348,7 +1475,7 @@ function EnvironmentPage({
       </section>
 
       <section className="mt-10">
-        <SectionHeader title="Suositusrajat" sub="Hevosasetus ei määrää lukuarvoja, joten rajat on koottu ohjeista ja tutkimuksista (lähteet sivun alareunassa)." />
+        <SectionHeader title="Suositusrajat" addon={<SourcesInfo />} sub="Vihreä = suosituksen mukainen, oranssi = lähellä rajaa tai hieman yli, punainen = selvästi yli." />
         <div className={`${CARD} overflow-x-auto`}>
           <table className="w-full text-left text-[15px] min-w-[640px]">
             <thead>

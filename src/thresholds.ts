@@ -1,8 +1,8 @@
 // Talli-ilman suositusrajat ja tilaluokitus (vihreä = hyvä, keltainen = rajalla, punainen = huono).
 //
-// Hevosten hyvinvointiasetus (VNA 321/2025, 12 §) ei anna numeerisia raja-arvoja, vaan edellyttää,
-// ettei kosteus, ammoniakki, hiilidioksidi tai pöly nouse "haitallisen korkealle". Rajat on koottu
-// alla mainituista lähteistä; muuta niitä vain tähän tiedostoon, niin sivu päivittyy kaikkialla.
+// Suomen hevosasetus (VNA 321/2025, 12 §) ei anna lukuarvoja. Vihreän alueen rajat tulevat SOURCES-listan
+// lähteistä (pääasiassa Saksan maatalousministeriön hevostalliohjeesta). Keltainen = lähellä rajaa tai hieman
+// yli, punainen = selvästi yli; nämä marginaalit ovat HummAPPin tulkinta. Muuta rajoja vain tähän tiedostoon.
 
 export type Level = 'good' | 'warn' | 'bad';
 
@@ -34,17 +34,17 @@ export const METRICS: MetricDef[] = [
     shortLabel: 'Lämpö',
     unit: '°C',
     decimals: 1,
-    scaleMin: -5,
-    scaleMax: 30,
+    scaleMin: -10,
+    scaleMax: 35,
     bands: [
-      { from: -5, to: 0, level: 'bad' },
-      { from: 0, to: 8, level: 'warn' },
-      { from: 8, to: 12, level: 'good' },
-      { from: 12, to: 24, level: 'warn' },
-      { from: 24, to: 30, level: 'bad' },
+      { from: -10, to: -5, level: 'bad' },
+      { from: -5, to: 5, level: 'warn' },
+      { from: 5, to: 25, level: 'good' },
+      { from: 25, to: 30, level: 'warn' },
+      { from: 30, to: 35, level: 'bad' },
     ],
-    guide: 'Optimi 8–12 °C. Hevonen sietää viileää hyvin, kuumaa huonommin.',
-    sources: [0, 2],
+    guide: 'Hyvä 5–25 °C. Tällä alueella hevonen pitää lämpönsä vaivatta.',
+    sources: [1],
   },
   {
     key: 'humidity',
@@ -52,17 +52,17 @@ export const METRICS: MetricDef[] = [
     shortLabel: 'Kosteus',
     unit: '%',
     decimals: 1,
-    scaleMin: 20,
+    scaleMin: 30,
     scaleMax: 100,
     bands: [
-      { from: 20, to: 40, level: 'bad' },
-      { from: 40, to: 50, level: 'warn' },
-      { from: 50, to: 65, level: 'good' },
-      { from: 65, to: 80, level: 'warn' },
-      { from: 80, to: 100, level: 'bad' },
+      { from: 30, to: 50, level: 'bad' },
+      { from: 50, to: 60, level: 'warn' },
+      { from: 60, to: 80, level: 'good' },
+      { from: 80, to: 90, level: 'warn' },
+      { from: 90, to: 100, level: 'bad' },
     ],
-    guide: 'Optimi 50–65 %. Kostea ilma kuormittaa hengitysteitä.',
-    sources: [0, 1],
+    guide: 'Suositus 60–80 %.',
+    sources: [0],
   },
   {
     key: 'ammonia',
@@ -73,12 +73,12 @@ export const METRICS: MetricDef[] = [
     scaleMin: 0,
     scaleMax: 20,
     bands: [
-      { from: 0, to: 5, level: 'good' },
-      { from: 5, to: 10, level: 'warn' },
+      { from: 0, to: 8, level: 'good' },
+      { from: 8, to: 10, level: 'warn' },
       { from: 10, to: 20, level: 'bad' },
     ],
-    guide: 'Alle 5 ppm hyvä. Yli 10 ppm on haitallista hevoselle.',
-    sources: [3, 4],
+    guide: 'Enintään 10 ppm, ja sekin saa ylittyä vain hetkellisesti.',
+    sources: [0],
   },
   {
     key: 'co2',
@@ -87,14 +87,14 @@ export const METRICS: MetricDef[] = [
     unit: 'ppm',
     decimals: 0,
     scaleMin: 0,
-    scaleMax: 4000,
+    scaleMax: 3000,
     bands: [
-      { from: 0, to: 1500, level: 'good' },
-      { from: 1500, to: 3000, level: 'warn' },
-      { from: 3000, to: 4000, level: 'bad' },
+      { from: 0, to: 1000, level: 'good' },
+      { from: 1000, to: 1500, level: 'warn' },
+      { from: 1500, to: 3000, level: 'bad' },
     ],
-    guide: 'Alle 1 500 ppm hyvä. Eläinsuojan ohjearvo on 3 000 ppm.',
-    sources: [4],
+    guide: 'Suositus alle 1 000 ppm. Korkea arvo kertoo heikosta ilmanvaihdosta.',
+    sources: [0],
   },
   {
     key: 'particulate_matter',
@@ -109,20 +109,35 @@ export const METRICS: MetricDef[] = [
       { from: 15, to: 30, level: 'warn' },
       { from: 30, to: 60, level: 'bad' },
     ],
-    guide: 'Alle 15 µg/m³ (WHO:n vuorokausiohjearvo). Yli 30 on huono.',
-    sources: [5],
+    guide: 'Alle 15 µg/m³ (WHO:n vuorokausiohjearvo). Hevosille ei ole omaa lukua.',
+    sources: [2],
   },
 ];
 
-export const SOURCES: { title: string; url: string }[] = [
-  { title: 'Nokian kaupunki: Hevostalliohje (2017)', url: 'https://www.nokiankaupunki.fi/wp-content/uploads/2017/11/Hevostalliohje-2017.pdf' },
-  { title: 'Animals 15/22 (2025): The Indoor Environment at the University Equestrian Facility', url: 'https://www.mdpi.com/2076-2615/15/22/3322' },
-  { title: 'Penn State Extension: Horse Stable Ventilation', url: 'https://extension.psu.edu/horse-stable-ventilation' },
-  { title: 'Kentucky Equine Research: Clean, airy stalls', url: 'https://ker.com/?p=10911' },
-  { title: 'Suomen maataloustieteellisen seuran tiedote 19: eläinsuojan ohjearvot (NH₃ 10 ppm, CO₂ 3 000 ppm)', url: 'https://journal.fi/smst/article/download/77089/38232/108512' },
-  { title: 'WHO:n ilmanlaatuohjeet 2021 (PM2.5 vuorokausi 15 µg/m³)', url: 'https://www.iqair.com/newsroom/2021-who-air-quality-guidelines' },
-  { title: 'Valtioneuvoston asetus hevosten hyvinvoinnista 321/2025, 12 §', url: 'https://finlex.fi/api/media/statute/677061/mainPdf/main.pdf' },
+/** Pääsääntö: vihreä = suosituksen mukainen. Keltaisen ja punaisen rajat ovat HummAPPin tulkinta. */
+export const SOURCES: { title: string; note: string; url: string }[] = [
+  {
+    title: 'Saksan maatalousministeriö (BMEL): hevostallien arviointiohje',
+    note: 'Kosteus, ammoniakki ja hiilidioksidi',
+    url: 'https://www.bmel.de/DE/Tier/Tierschutz/Tierschutzgutachten/_texte/TierschutzPferdehaltung.html',
+  },
+  {
+    title: 'Agroscope (Sveitsin maatalouden tutkimuslaitos), 2024',
+    note: 'Lämpötila',
+    url: 'https://www.agroscope.admin.ch/agroscope/en/home/news/newsroom/2024/08-26_Pferdestallklima.html',
+  },
+  {
+    title: 'WHO:n ilmanlaatuohjeet, 2021',
+    note: 'Pienhiukkaset',
+    url: 'https://www.who.int/publications/i/item/9789240034228',
+  },
 ];
+
+/** Suomen hevosasetus edellyttää vain, ettei pitoisuuksia ole "haitallisen korkealla", eikä anna lukuja. */
+export const FINNISH_LAW = {
+  title: 'Valtioneuvoston asetus hevosten hyvinvoinnista 321/2025',
+  url: 'https://finlex.fi/api/media/statute/677061/mainPdf/main.pdf',
+};
 
 export function levelFor(def: MetricDef, value: number | null | undefined): Level | null {
   if (value === null || value === undefined || Number.isNaN(value)) return null;
