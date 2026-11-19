@@ -25,6 +25,8 @@ export interface MetricDef {
   guide: string;
   /** Lähteet raja-arvoille (indeksit SOURCES-listaan) */
   sources: number[];
+  /** '24h' = ohjearvo on vuorokausikeskiarvo, joten luokitus lasketaan 24 h:n keskiarvosta */
+  averaging?: '24h';
 }
 
 export const METRICS: MetricDef[] = [
@@ -109,8 +111,9 @@ export const METRICS: MetricDef[] = [
       { from: 15, to: 30, level: 'warn' },
       { from: 30, to: 60, level: 'bad' },
     ],
-    guide: 'Alle 15 µg/m³ (WHO:n vuorokausiohjearvo). Hevosille ei ole omaa lukua.',
+    guide: 'Ohjearvo alle 15 µg/m³ (WHO). Hevosille ei ole omaa lukua.',
     sources: [2],
+    averaging: '24h',
   },
 ];
 

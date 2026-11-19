@@ -390,6 +390,7 @@ export default function App() {
                 isLoading={isLoading}
                 onRefresh={loadPublicData}
                 latestAir={latestAir}
+                airReadings={airReadings}
                 waterDaily={waterDaily}
                 avgWater={avgWater}
                 drinkingHorse={drinkingHorse}
@@ -699,9 +700,46 @@ function RangeGauge({ def, value }: { def: MetricDef; value: number | null }) {
   );
 }
 
-function AirMetricCard({ def, reading }: { def: MetricDef; reading: StableAirMeasurement | null }) {
-  const value = reading ? (reading[def.key] as number | null) : null;
-  const level = levelFor(def, value);
+// Mittarin arvo luokitusta varten. Jos ohjearvo on vuorokausikeskiarvo (PM2.5), lasketaan saman sijainnin
+// mittausten keskiarvo viimeisimmän mittauksen edeltävältä 24 tunnilta.
+interface MetricSummary {
+  value: number | null;
+  level: Level | null;
+  avg?: { n: number; spanHours: number };
+}
+
+function summarizeMetric(def: MetricDef, readings: StableAirMeasurement[]): MetricSummary {
+  const latest = readings[0];
+  if (!latest) return { value: null, level: null };
+  if (def.averaging !== '24h') {
+    const value = latest[def.key] as number | null;
+    return { value, level: levelFor(def, value) };
+  }
+  const end = parseUtc(latest.measured_at).getTime();
+  const window = readings.filter((r) => {
+    const t = parseUtc(r.measured_at).getTime();
+    return r.location === latest.location && t <= end && t > end - 24 * 3600 * 1000 && r[def.key] !== null;
+  });
+  if (window.length === 0) return { value: null, level: null };
+  const values = window.map((r) => r[def.key] as number);
+  const value = values.reduce((a, b) => a + b, 0) / values.length;
+  const times = window.map((r) => parseUtc(r.measured_at).getTime());
+  const spanHours = (Math.max(...times) - Math.min(...times)) / 3600000;
+  return { value, level: levelFor(def, value), avg: { n: window.length, spanHours } };
+}
+
+function AvgNote({ avg }: { avg: NonNullable<MetricSummary['avg']> }) {
+  const partial = avg.spanHours < 18;
+  return (
+    <p className="text-sm text-[#6D6E71] leading-snug">
+      Vuorokauden keskiarvo, {avg.n} {avg.n === 1 ? 'mittaus' : 'mittausta'}.
+      {partial && ' Mittauksia on alle vuorokauden ajalta, joten vertailu on suuntaa antava.'}
+    </p>
+  );
+}
+
+function AirMetricCard({ def, readings }: { def: MetricDef; readings: StableAirMeasurement[] }) {
+  const { value, level, avg } = summarizeMetric(def, readings);
   return (
     <div className={`${CARD} p-5 flex flex-col gap-3`}>
       <div className="flex items-start justify-between gap-3">
@@ -713,6 +751,7 @@ function AirMetricCard({ def, reading }: { def: MetricDef; reading: StableAirMea
         <span className="ml-1.5 text-base font-normal text-[#6D6E71]">{def.unit}</span>
       </p>
       <RangeGauge def={def} value={value} />
+      {avg && <AvgNote avg={avg} />}
       <p className="text-sm text-[#6D6E71] leading-snug">{def.guide}</p>
     </div>
   );
@@ -838,6 +877,7 @@ function OverviewPage({
   isLoading,
   onRefresh,
   latestAir,
+  airReadings,
   waterDaily,
   avgWater,
   drinkingHorse,
@@ -850,6 +890,7 @@ function OverviewPage({
   isLoading: boolean;
   onRefresh: () => void;
   latestAir: StableAirMeasurement | null;
+  airReadings: StableAirMeasurement[];
   waterDaily: WaterDailySummary[];
   avgWater: number;
   drinkingHorse: string;
@@ -857,7 +898,7 @@ function OverviewPage({
   nfcCount: number;
   clipSeconds: number;
 }) {
-  const levels = METRICS.map((m) => ({ def: m, level: levelFor(m, latestAir ? (latestAir[m.key] as number | null) : null) }));
+  const levels = METRICS.map((m) => ({ def: m, ...summarizeMetric(m, airReadings) }));
   const goodCount = levels.filter((l) => l.level === 'good').length;
   const latestWater = waterDaily[waterDaily.length - 1];
   const diff = latestWater ? latestWater.total_liters - avgWater : 0;
@@ -924,11 +965,14 @@ function OverviewPage({
                 ))}
               </div>
               <ul className="mt-5 divide-y divide-white/10">
-                {levels.map(({ def, level }) => (
+                {levels.map(({ def, level, value, avg }) => (
                   <li key={def.key} className="flex items-center justify-between gap-3 py-2.5 text-[15px]">
-                    <span className="text-white">{def.label}</span>
+                    <span className="text-white">
+                      {def.label}
+                      {avg && <span className="block text-sm text-[#C0E1F0]">vuorokauden keskiarvo</span>}
+                    </span>
                     <span className="inline-flex items-center gap-2 text-[#DCEEF6] tabular-nums">
-                      {fmt(latestAir ? (latestAir[def.key] as number | null) : null, def.decimals)} {def.unit}
+                      {fmt(value, def.decimals)} {def.unit}
                       {level && (
                         <span className="inline-flex items-center gap-1 font-medium text-white">
                           <LevelIcon level={level} />
@@ -992,7 +1036,7 @@ function OverviewPage({
           {latestAir ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
               {METRICS.map((m) => (
-                <AirMetricCard key={m.key} def={m} reading={latestAir} />
+                <AirMetricCard key={m.key} def={m} readings={airReadings} />
               ))}
             </div>
           ) : (
@@ -1384,7 +1428,8 @@ function WaterPage({
 // =====================================================================
 
 function ValueCell({ def, value }: { def: MetricDef; value: number | null }) {
-  const level = levelFor(def, value);
+  // Vuorokausikeskiarvoon perustuvaa ohjearvoa ei verrata yksittäiseen mittaukseen
+  const level = def.averaging === '24h' ? null : levelFor(def, value);
   return (
     <td className="py-3 px-4 text-right tabular-nums whitespace-nowrap">
       <span className="inline-flex items-center gap-1.5 justify-end" style={level ? { color: LEVEL_META[level].text } : undefined}>
@@ -1436,7 +1481,7 @@ function EnvironmentPage({
         {latest ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             {METRICS.map((m) => (
-              <AirMetricCard key={m.key} def={m} reading={latest} />
+              <AirMetricCard key={m.key} def={m} readings={airReadings} />
             ))}
           </div>
         ) : (
@@ -1445,7 +1490,7 @@ function EnvironmentPage({
       </section>
 
       <section className="mt-10">
-        <SectionHeader title="Mittaukset sijainneittain" sub="Kuvake ja väri kertovat, onko arvo suositusrajojen sisällä." />
+        <SectionHeader title="Mittaukset sijainneittain" sub="Kuvake ja väri kertovat, onko arvo suositusrajojen sisällä. Pienhiukkasia ei luokitella yksittäisistä mittauksista, koska niiden ohjearvo on vuorokauden keskiarvo." />
         <div className={`${CARD} overflow-x-auto`}>
           <table className="w-full text-left text-[15px] min-w-[760px]">
             <thead>
@@ -1493,7 +1538,10 @@ function EnvironmentPage({
             <tbody className="divide-y divide-[#EDF0F4]">
               {METRICS.map((m) => (
                 <tr key={m.key}>
-                  <td className="py-3 px-4 font-medium text-[#1B325E] whitespace-nowrap">{m.label}</td>
+                  <td className="py-3 px-4 font-medium text-[#1B325E] whitespace-nowrap">
+                    {m.label}
+                    {m.averaging === '24h' && <span className="block text-sm font-normal text-[#6D6E71]">vuorokauden keskiarvo</span>}
+                  </td>
                   {(['good', 'warn', 'bad'] as Level[]).map((l) => (
                     <td key={l} className="py-3 px-4 tabular-nums">
                       {m.bands
