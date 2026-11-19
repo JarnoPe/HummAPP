@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef, useId } from 'react';
 import {
   Droplet,
   Thermometer,
@@ -16,6 +16,7 @@ import {
   Info,
   Mail,
   ExternalLink,
+  Table as TableIcon,
 } from 'lucide-react';
 import { METRICS, SOURCES, FINNISH_LAW, LEVEL_META, levelFor, type Level, type MetricDef } from './thresholds';
 import { t, metricText, setLang, locale, type Lang } from './i18n';
@@ -879,9 +880,32 @@ function WaterChart({
   avgWater: number;
   height?: number;
 }) {
+  // Näppäimistö: kaavio on yksi sarkainpysähdys, ja päivästä toiseen liikutaan nuolinäppäimillä
+  const [focusIdx, setFocusIdx] = useState<number | null>(null);
+  const [showTable, setShowTable] = useState(false);
+  const barRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const tableId = useId();
   if (waterDaily.length === 0) {
     return <p className="text-base text-[#6D6E71] py-10 text-center">{t().chartEmpty}</p>;
   }
+  const rovingIdx = focusIdx ?? waterDaily.length - 1;
+  const onBarsKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const last = waterDaily.length - 1;
+    const next =
+      e.key === 'ArrowRight' || e.key === 'ArrowDown'
+        ? Math.min(last, rovingIdx + 1)
+        : e.key === 'ArrowLeft' || e.key === 'ArrowUp'
+          ? Math.max(0, rovingIdx - 1)
+          : e.key === 'Home'
+            ? 0
+            : e.key === 'End'
+              ? last
+              : null;
+    if (next === null) return;
+    e.preventDefault();
+    setFocusIdx(next);
+    barRefs.current[next]?.focus();
+  };
   const max = Math.max(...waterDaily.map((d) => d.total_liters), avgWater);
   const top = Math.max(10, Math.ceil((max * 1.1) / 10) * 10);
   const ticks: number[] = [];
@@ -916,14 +940,23 @@ function WaterChart({
             </span>
           </div>
           {/* pylväät */}
-          <div className="absolute inset-0 flex items-end gap-[6px] sm:gap-3" role="list">
+          <div
+            className="absolute inset-0 flex items-end gap-[6px] sm:gap-3"
+            role="list"
+            aria-label={t().chartListAria}
+            onKeyDown={onBarsKey}
+          >
             {waterDaily.map((d, idx) => {
               const isLatest = idx === waterDaily.length - 1;
               return (
                 <div
                   key={d.date}
                   role="listitem"
-                  tabIndex={0}
+                  ref={(el) => {
+                    barRefs.current[idx] = el;
+                  }}
+                  tabIndex={idx === rovingIdx ? 0 : -1}
+                  onFocus={() => setFocusIdx(idx)}
                   aria-label={t().chartBarAria(formatDay(d.date), fmt(d.total_liters, 1), d.measurement_count)}
                   className="group relative flex-1 h-full flex items-end rounded-t-[4px]"
                 >
@@ -974,7 +1007,39 @@ function WaterChart({
         <span className="inline-flex items-center gap-2">
           <span className="w-4 border-t-2 border-dashed border-[#FDBE4F]" aria-hidden="true" /> {t().chartLegendAvg}
         </span>
+        <button
+          type="button"
+          aria-expanded={showTable}
+          aria-controls={tableId}
+          onClick={() => setShowTable((v) => !v)}
+          className={`ml-auto inline-flex items-center gap-1.5 min-h-11 text-[15px] ${LINK}`}
+        >
+          <TableIcon className="w-4 h-4" aria-hidden="true" />
+          {showTable ? t().chartHideTable : t().chartShowTable}
+        </button>
       </figcaption>
+      {showTable && (
+        <div id={tableId} className="mt-3 overflow-x-auto rounded-xl border border-[#E3E8EF]">
+          <table className="w-full text-left text-[15px]">
+            <thead>
+              <tr className="border-b border-[#E3E8EF] text-sm text-[#6D6E71]">
+                <th scope="col" className="py-2.5 px-4 font-medium">{t().colDay}</th>
+                <th scope="col" className="py-2.5 px-4 font-medium text-right">{t().colLitres}</th>
+                <th scope="col" className="py-2.5 px-4 font-medium text-right">{t().colDrinks}</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#EDF0F4]">
+              {waterDaily.map((d) => (
+                <tr key={d.date}>
+                  <td className="py-2.5 px-4 tabular-nums">{formatDay(d.date)}</td>
+                  <td className="py-2.5 px-4 text-right font-medium text-[#1B325E] tabular-nums">{fmt(d.total_liters, 1)}</td>
+                  <td className="py-2.5 px-4 text-right tabular-nums">{d.measurement_count}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </figure>
   );
 }
