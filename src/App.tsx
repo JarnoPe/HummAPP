@@ -469,7 +469,7 @@ export default function App() {
             {[
               { t: 'Toteuttajat', d: 'Kaustisen seutukunta ja Kpedu (EIP-yhteistyöhanke)' },
               { t: 'Rahoittaja', d: 'Pohjanmaan ELY-keskus, Euroopan maaseuturahasto' },
-              { t: 'Toteutusaika', d: '1.1.2025–31.12.2026' },
+              { t: 'Toteutusaika', d: '1.1.2025–30.6.2027' },
               { t: 'Kohderyhmä', d: 'Keski-Pohjanmaan hevostilat, eläinlääkärit ja ohjelmistoyritykset' },
             ].map((r) => (
               <div key={r.t}>
